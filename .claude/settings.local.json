@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub get:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(timeout 60 tail:*)",
+      "Bash(adb install:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter attach:*)",
+      "Bash(gcloud firestore databases create:*)",
+      "Bash(gcloud services enable:*)",
+      "Bash(gsutil mb:*)",
+      "Bash(gcloud builds submit:*)",
+      "Bash(gcloud run services describe:*)",
+      "Bash(curl:*)",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/health''\")",
+      "Bash(gcloud run services add-iam-policy-binding:*)",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports'' -Method GET\")",
+      "Bash(gcloud run services update:*)",
+      "Bash(gcloud run services logs read:*)",
+      "Bash(gcloud logging read:*)",
+      "Bash(powershell -Command \"$body = @{title=''Test Report'';description=''Testing the API endpoint'';dateTime=''2026-01-21T12:00:00Z'';roadUsage=''Auto'';eventType=''Speeding'';state=''California'';injuries=''''} | ConvertTo-Json; Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports'' -Method POST -Body $body -ContentType ''application/json''\")",
+      "Bash(powershell -Command \"\n$body = ''{\"\"title\"\":\"\"Test Report\"\",\"\"description\"\":\"\"Testing the API endpoint\"\",\"\"dateTime\"\":\"\"2026-01-21T12:00:00Z\"\",\"\"roadUsage\"\":\"\"Auto\"\",\"\"eventType\"\":\"\"Speeding\"\",\"\"state\"\":\"\"California\"\",\"\"injuries\"\":\"\"\"\"}''\nInvoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports'' -Method POST -Body $body -ContentType ''application/json''\n\")",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports'' -Method POST -Body \\(Get-Content -Raw test_report.json\\) -ContentType ''application/json''\")",
+      "Bash(gcloud firestore indexes composite create:*)",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports/37ae0b8d-cfc1-430d-9e67-ce46979cd535'' -Method GET\")",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports/37ae0b8d-cfc1-430d-9e67-ce46979cd535'' -Method DELETE\")",
+      "Bash(del:*)",
+      "Bash(go test:*)"
+    ]
+  }
+}

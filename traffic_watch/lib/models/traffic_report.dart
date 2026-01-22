@@ -120,39 +120,52 @@ class MediaFile {
   final MediaType type;
   final int size;
   final String? url;
+  final String? contentType;
 
   MediaFile({
     this.id,
     required this.name,
-    required this.path,
+    this.path = '',
     required this.type,
     required this.size,
     this.url,
+    this.contentType,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
-      'path': path,
-      'type': type.name,
+      'fileName': name,
+      'contentType': contentType ?? (type == MediaType.video ? 'video/mp4' : 'image/jpeg'),
       'size': size,
       'url': url,
     };
   }
 
   factory MediaFile.fromJson(Map<String, dynamic> json) {
+    // Handle both backend format (fileName/contentType) and local format (name/type)
+    final fileName = json['fileName'] as String? ?? json['name'] as String? ?? '';
+    final contentType = json['contentType'] as String? ?? '';
+
     return MediaFile(
       id: json['id'] as String?,
-      name: json['name'] as String,
-      path: json['path'] as String,
-      type: MediaType.values.firstWhere(
-        (t) => t.name == json['type'],
-        orElse: () => MediaType.image,
-      ),
-      size: json['size'] as int,
+      name: fileName,
+      path: json['path'] as String? ?? '',
+      type: _detectMediaType(contentType, fileName),
+      size: (json['size'] as num?)?.toInt() ?? 0,
       url: json['url'] as String?,
+      contentType: contentType,
     );
+  }
+
+  static MediaType _detectMediaType(String contentType, String fileName) {
+    if (contentType.startsWith('video/')) return MediaType.video;
+    if (contentType.startsWith('image/')) return MediaType.image;
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.avi')) {
+      return MediaType.video;
+    }
+    return MediaType.image;
   }
 
   /// Check if this is a video file

@@ -14,10 +14,19 @@ const (
 	UserContextKey = "user"
 )
 
-// IAPAuth returns a middleware that validates IAP JWT tokens
+// IAPAuth returns a middleware that validates IAP JWT tokens or Google Sign-In ID tokens
 func IAPAuth(validator *auth.IAPValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Try IAP header first
 		token := c.GetHeader(auth.IAPJWTHeader)
+
+		// If no IAP header, try Authorization Bearer token
+		if token == "" {
+			authHeader := c.GetHeader("Authorization")
+			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+				token = authHeader[7:]
+			}
+		}
 
 		userInfo, err := validator.ValidateToken(c.Request.Context(), token)
 		if err != nil {

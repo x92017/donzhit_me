@@ -28,6 +28,7 @@ func main() {
 	projectID := getEnv("GOOGLE_CLOUD_PROJECT", "")
 	bucketName := getEnv("GCS_BUCKET", "traffic-watch-media")
 	iapAudience := getEnv("IAP_AUDIENCE", "")
+	oauthClientID := getEnv("OAUTH_CLIENT_ID", "")
 	devMode := getEnv("DEV_MODE", "false") == "true"
 
 	// Set Gin mode
@@ -44,8 +45,12 @@ func main() {
 		log.Fatalf("Failed to register validators: %v", err)
 	}
 
-	// Initialize IAP validator
+	// Initialize IAP validator (supports both IAP and Google Sign-In tokens)
 	iapValidator := auth.NewIAPValidator(iapAudience, devMode)
+	if oauthClientID != "" {
+		iapValidator.SetOAuthClientID(oauthClientID)
+		log.Printf("OAuth client ID configured for Google Sign-In token validation")
+	}
 
 	// Initialize storage clients
 	var firestoreClient *storage.FirestoreClient

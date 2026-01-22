@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -52,9 +53,11 @@ func (h *ReportsHandler) CreateReport(c *gin.Context) {
 func (h *ReportsHandler) createReportJSON(c *gin.Context, user *models.UserInfo) {
 	var req models.CreateReportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("Validation error for user %s: %v", user.Email, err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "validation_error",
 			"message": err.Error(),
+			"details": fmt.Sprintf("%v", err),
 		})
 		return
 	}
@@ -95,18 +98,38 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	state := c.PostForm("state")
 	injuries := c.PostForm("injuries")
 
-	// Parse datetime
-	dateTime, err := time.Parse(time.RFC3339, dateTimeStr)
+	log.Printf("Multipart form received - title: %s, roadUsage: %s, eventType: %s, state: %s, dateTime: %s",
+		title, roadUsage, eventType, state, dateTimeStr)
+
+	// Parse datetime - try multiple formats
+	var dateTime time.Time
+	var err error
+	dateFormats := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05.999999999",  // ISO8601 without timezone
+		"2006-01-02T15:04:05.999999",     // ISO8601 with microseconds
+		"2006-01-02T15:04:05",            // ISO8601 basic
+	}
+	for _, format := range dateFormats {
+		dateTime, err = time.Parse(format, dateTimeStr)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
+		log.Printf("DateTime parse error for user %s: %v (received: %s)", user.Email, err, dateTimeStr)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "validation_error",
-			"message": "invalid dateTime format, expected RFC3339",
+			"message": fmt.Sprintf("invalid dateTime format: %s", dateTimeStr),
 		})
 		return
 	}
 
 	// Validate required fields
 	if title == "" || description == "" || roadUsage == "" || eventType == "" || state == "" {
+		log.Printf("Missing required fields for user %s - title:%v desc:%v roadUsage:%v eventType:%v state:%v",
+			user.Email, title != "", description != "", roadUsage != "", eventType != "", state != "")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "validation_error",
 			"message": "missing required fields",
@@ -136,12 +159,17 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	form, err := c.MultipartForm()
 	var mediaFiles []models.MediaFile
 
+	log.Printf("Processing file uploads for user %s", user.Email)
 	if err == nil && form != nil && form.File != nil {
 		files := form.File["files"]
-		for _, fileHeader := range files {
+		log.Printf("Found %d files to upload", len(files))
+		for i, fileHeader := range files {
+			log.Printf("Processing file %d: %s (size: %d, content-type: %s)",
+				i, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
 			// Validate file
 			valid, errMsg := validation.ValidateFile(fileHeader)
 			if !valid {
+				log.Printf("File validation failed for %s: %s", fileHeader.Filename, errMsg)
 				c.JSON(http.StatusBadRequest, gin.H{
 					"error":   "validation_error",
 					"message": errMsg,
@@ -161,9 +189,14 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 
 			fileID := uuid.New().String()
 			contentType := fileHeader.Header.Get("Content-Type")
+			// Detect content type from extension if not properly set
+			if contentType == "" || contentType == "application/octet-stream" {
+				contentType = validation.DetectContentType(fileHeader.Filename)
+			}
 			safeFileName := validation.SanitizeFileName(fileHeader.Filename)
 
 			// Upload to GCS
+			log.Printf("Uploading file %s to GCS", fileHeader.Filename)
 			objectPath, err := h.gcs.UploadFile(
 				c.Request.Context(),
 				user.Subject,
@@ -175,12 +208,14 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 			file.Close()
 
 			if err != nil {
+				log.Printf("GCS upload failed for %s: %v", fileHeader.Filename, err)
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"error":   "upload_failed",
 					"message": "failed to upload file to storage",
 				})
 				return
 			}
+			log.Printf("File uploaded successfully to %s", objectPath)
 
 			// Generate signed URL
 			signedURL, err := h.gcs.GetSignedURL(c.Request.Context(), objectPath, 0)
@@ -213,7 +248,9 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 		Status:      models.StatusActive,
 	}
 
+	log.Printf("Creating report %s in Firestore for user %s", reportID, user.Email)
 	if err := h.firestore.CreateReport(c.Request.Context(), report); err != nil {
+		log.Printf("Firestore create failed for report %s: %v", reportID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "create_failed",
 			"message": "failed to create report",
@@ -221,6 +258,7 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 		return
 	}
 
+	log.Printf("Report %s created successfully", reportID)
 	c.JSON(http.StatusCreated, report)
 }
 

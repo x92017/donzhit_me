@@ -18,7 +18,10 @@ import (
 
 const (
 	// Google's public key URL for IAP JWT verification
-	googlePublicKeysURL = "https://www.gstatic.com/iap/verify/public_key-jwk"
+	googleIAPPublicKeysURL = "https://www.gstatic.com/iap/verify/public_key-jwk"
+
+	// Google's public key URL for OAuth2/Sign-In ID token verification
+	googleOAuth2PublicKeysURL = "https://www.googleapis.com/oauth2/v3/certs"
 
 	// IAP JWT header name
 	IAPJWTHeader = "X-Goog-IAP-JWT-Assertion"
@@ -42,26 +45,35 @@ type JWKSet struct {
 	Keys []JWK `json:"keys"`
 }
 
-// IAPValidator validates Google IAP JWT tokens
+// IAPValidator validates Google IAP JWT tokens and Google Sign-In ID tokens
 type IAPValidator struct {
-	audience     string
-	keys         map[string]*rsa.PublicKey
-	keysExpiry   time.Time
-	keysMutex    sync.RWMutex
-	httpClient   *http.Client
-	devMode      bool
-	devUserEmail string
+	audience       string
+	oauthClientID  string
+	iapKeys        map[string]*rsa.PublicKey
+	iapKeysExpiry  time.Time
+	oauth2Keys     map[string]*rsa.PublicKey
+	oauth2Expiry   time.Time
+	keysMutex      sync.RWMutex
+	httpClient     *http.Client
+	devMode        bool
+	devUserEmail   string
 }
 
 // NewIAPValidator creates a new IAP JWT validator
 func NewIAPValidator(audience string, devMode bool) *IAPValidator {
 	return &IAPValidator{
 		audience:     audience,
-		keys:         make(map[string]*rsa.PublicKey),
+		iapKeys:      make(map[string]*rsa.PublicKey),
+		oauth2Keys:   make(map[string]*rsa.PublicKey),
 		httpClient:   &http.Client{Timeout: 10 * time.Second},
 		devMode:      devMode,
 		devUserEmail: "dev@localhost",
 	}
+}
+
+// SetOAuthClientID sets the OAuth2 client ID for Google Sign-In token validation
+func (v *IAPValidator) SetOAuthClientID(clientID string) {
+	v.oauthClientID = clientID
 }
 
 // SetDevUserEmail sets the email to use in dev mode
@@ -69,7 +81,7 @@ func (v *IAPValidator) SetDevUserEmail(email string) {
 	v.devUserEmail = email
 }
 
-// ValidateToken validates an IAP JWT token and returns user info
+// ValidateToken validates an IAP JWT token or Google Sign-In ID token and returns user info
 func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models.UserInfo, error) {
 	// In dev mode, return mock user
 	if v.devMode {
@@ -126,14 +138,24 @@ func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
 	}
 
-	// Verify issuer
-	if claims.Iss != "https://cloud.google.com/iap" {
+	// Check issuer to determine token type
+	isIAPToken := claims.Iss == "https://cloud.google.com/iap"
+	isGoogleIDToken := claims.Iss == "https://accounts.google.com" || claims.Iss == "accounts.google.com"
+
+	if !isIAPToken && !isGoogleIDToken {
 		return nil, fmt.Errorf("invalid issuer: %s", claims.Iss)
 	}
 
-	// Verify audience
-	if v.audience != "" && claims.Aud != v.audience {
-		return nil, fmt.Errorf("invalid audience: %s", claims.Aud)
+	// Verify audience based on token type
+	if isIAPToken {
+		if v.audience != "" && claims.Aud != v.audience {
+			return nil, fmt.Errorf("invalid audience for IAP token: %s", claims.Aud)
+		}
+	} else if isGoogleIDToken {
+		// For Google ID tokens, audience should be the OAuth2 client ID
+		if v.oauthClientID != "" && claims.Aud != v.oauthClientID {
+			return nil, fmt.Errorf("invalid audience for Google ID token: %s (expected: %s)", claims.Aud, v.oauthClientID)
+		}
 	}
 
 	// Verify expiration
@@ -147,8 +169,13 @@ func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models
 		return nil, errors.New("token issued in the future")
 	}
 
-	// Get public key and verify signature
-	key, err := v.getPublicKey(ctx, header.Kid)
+	// Get public key based on token type and verify signature
+	var key *rsa.PublicKey
+	if isIAPToken {
+		key, err = v.getIAPPublicKey(ctx, header.Kid)
+	} else {
+		key, err = v.getOAuth2PublicKey(ctx, header.Kid)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public key: %w", err)
 	}
@@ -164,11 +191,11 @@ func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models
 	}, nil
 }
 
-// getPublicKey retrieves a public key by key ID
-func (v *IAPValidator) getPublicKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
+// getIAPPublicKey retrieves a public key for IAP tokens by key ID
+func (v *IAPValidator) getIAPPublicKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	v.keysMutex.RLock()
-	if time.Now().Before(v.keysExpiry) {
-		if key, ok := v.keys[kid]; ok {
+	if time.Now().Before(v.iapKeysExpiry) {
+		if key, ok := v.iapKeys[kid]; ok {
 			v.keysMutex.RUnlock()
 			return key, nil
 		}
@@ -176,24 +203,51 @@ func (v *IAPValidator) getPublicKey(ctx context.Context, kid string) (*rsa.Publi
 	v.keysMutex.RUnlock()
 
 	// Refresh keys
-	if err := v.refreshKeys(ctx); err != nil {
+	if err := v.refreshIAPKeys(ctx); err != nil {
 		return nil, err
 	}
 
 	v.keysMutex.RLock()
 	defer v.keysMutex.RUnlock()
 
-	key, ok := v.keys[kid]
+	key, ok := v.iapKeys[kid]
 	if !ok {
-		return nil, fmt.Errorf("key not found: %s", kid)
+		return nil, fmt.Errorf("IAP key not found: %s", kid)
 	}
 
 	return key, nil
 }
 
-// refreshKeys fetches the latest public keys from Google
-func (v *IAPValidator) refreshKeys(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, googlePublicKeysURL, nil)
+// getOAuth2PublicKey retrieves a public key for Google Sign-In tokens by key ID
+func (v *IAPValidator) getOAuth2PublicKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
+	v.keysMutex.RLock()
+	if time.Now().Before(v.oauth2Expiry) {
+		if key, ok := v.oauth2Keys[kid]; ok {
+			v.keysMutex.RUnlock()
+			return key, nil
+		}
+	}
+	v.keysMutex.RUnlock()
+
+	// Refresh keys
+	if err := v.refreshOAuth2Keys(ctx); err != nil {
+		return nil, err
+	}
+
+	v.keysMutex.RLock()
+	defer v.keysMutex.RUnlock()
+
+	key, ok := v.oauth2Keys[kid]
+	if !ok {
+		return nil, fmt.Errorf("OAuth2 key not found: %s", kid)
+	}
+
+	return key, nil
+}
+
+// refreshIAPKeys fetches the latest IAP public keys from Google
+func (v *IAPValidator) refreshIAPKeys(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, googleIAPPublicKeysURL, nil)
 	if err != nil {
 		return err
 	}
@@ -205,7 +259,7 @@ func (v *IAPValidator) refreshKeys(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch keys: status %d", resp.StatusCode)
+		return fmt.Errorf("failed to fetch IAP keys: status %d", resp.StatusCode)
 	}
 
 	var jwkSet JWKSet
@@ -216,7 +270,7 @@ func (v *IAPValidator) refreshKeys(ctx context.Context) error {
 	v.keysMutex.Lock()
 	defer v.keysMutex.Unlock()
 
-	v.keys = make(map[string]*rsa.PublicKey)
+	v.iapKeys = make(map[string]*rsa.PublicKey)
 	for _, jwk := range jwkSet.Keys {
 		if jwk.Kty != "RSA" {
 			continue
@@ -227,10 +281,54 @@ func (v *IAPValidator) refreshKeys(ctx context.Context) error {
 			continue
 		}
 
-		v.keys[jwk.Kid] = key
+		v.iapKeys[jwk.Kid] = key
 	}
 
-	v.keysExpiry = time.Now().Add(keysCacheDuration)
+	v.iapKeysExpiry = time.Now().Add(keysCacheDuration)
+
+	return nil
+}
+
+// refreshOAuth2Keys fetches the latest OAuth2 public keys from Google
+func (v *IAPValidator) refreshOAuth2Keys(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, googleOAuth2PublicKeysURL, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := v.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch OAuth2 keys: status %d", resp.StatusCode)
+	}
+
+	var jwkSet JWKSet
+	if err := json.NewDecoder(resp.Body).Decode(&jwkSet); err != nil {
+		return err
+	}
+
+	v.keysMutex.Lock()
+	defer v.keysMutex.Unlock()
+
+	v.oauth2Keys = make(map[string]*rsa.PublicKey)
+	for _, jwk := range jwkSet.Keys {
+		if jwk.Kty != "RSA" {
+			continue
+		}
+
+		key, err := jwkToRSAPublicKey(jwk)
+		if err != nil {
+			continue
+		}
+
+		v.oauth2Keys[jwk.Kid] = key
+	}
+
+	v.oauth2Expiry = time.Now().Add(keysCacheDuration)
 
 	return nil
 }

@@ -2,9 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/report_provider.dart';
 import '../models/traffic_report.dart';
+import '../services/api_service.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final ApiService _apiService = ApiService();
+  bool _isSigningIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService.initialize();
+  }
+
+  Future<void> _handleSignIn() async {
+    setState(() => _isSigningIn = true);
+    try {
+      await _apiService.signIn();
+    } finally {
+      setState(() => _isSigningIn = false);
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    await _apiService.signOut();
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,13 +90,16 @@ class HomeScreen extends StatelessWidget {
                   size: 40,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Traffic Watch',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                Expanded(
+                  child: Text(
+                    'Traffic Watch',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
+                _buildAuthButton(),
               ],
             ),
             const SizedBox(height: 8),
@@ -77,8 +109,49 @@ class HomeScreen extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.9),
                   ),
             ),
+            if (_apiService.isSignedIn) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Signed in as ${_apiService.userEmail}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAuthButton() {
+    if (_isSigningIn) {
+      return const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2,
+        ),
+      );
+    }
+
+    if (_apiService.isSignedIn) {
+      return IconButton(
+        icon: const Icon(Icons.logout, color: Colors.white),
+        onPressed: _handleSignOut,
+        tooltip: 'Sign out',
+      );
+    }
+
+    return ElevatedButton.icon(
+      onPressed: _handleSignIn,
+      icon: const Icon(Icons.login, size: 18),
+      label: const Text('Sign In'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.primary,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
     );
   }
@@ -328,11 +401,14 @@ class _ActionButton extends StatelessWidget {
             children: [
               Icon(icon, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.primary,
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             ],

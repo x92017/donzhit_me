@@ -129,6 +129,11 @@ func ValidateUUID(id string) bool {
 func ValidateFile(header *multipart.FileHeader) (bool, string) {
 	contentType := header.Header.Get("Content-Type")
 
+	// If content-type is octet-stream or empty, try to detect from extension
+	if contentType == "" || contentType == "application/octet-stream" {
+		contentType = DetectContentType(header.Filename)
+	}
+
 	// Check if it's an allowed image type
 	if allowedImageTypes[contentType] {
 		if header.Size > MaxImageSize {
@@ -146,6 +151,37 @@ func ValidateFile(header *multipart.FileHeader) (bool, string) {
 	}
 
 	return false, "file type not allowed"
+}
+
+// DetectContentType detects content type from file extension
+func DetectContentType(filename string) string {
+	lower := strings.ToLower(filename)
+	switch {
+	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lower, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lower, ".gif"):
+		return "image/gif"
+	case strings.HasSuffix(lower, ".webp"):
+		return "image/webp"
+	case strings.HasSuffix(lower, ".heic"):
+		return "image/heic"
+	case strings.HasSuffix(lower, ".heif"):
+		return "image/heif"
+	case strings.HasSuffix(lower, ".mp4"):
+		return "video/mp4"
+	case strings.HasSuffix(lower, ".mov"):
+		return "video/quicktime"
+	case strings.HasSuffix(lower, ".avi"):
+		return "video/x-msvideo"
+	case strings.HasSuffix(lower, ".webm"):
+		return "video/webm"
+	case strings.HasSuffix(lower, ".mpeg"), strings.HasSuffix(lower, ".mpg"):
+		return "video/mpeg"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // SanitizeFileName sanitizes a file name to prevent path traversal

@@ -15,8 +15,8 @@ class ApiService {
   // Development: Local server
   static const String _developmentUrl = 'http://localhost:8080/v1';
 
-  // Use development URL in debug mode, production otherwise
-  static String get _baseUrl => kDebugMode ? _developmentUrl : _productionUrl;
+  // Always use production URL (Cloud Run)
+  static String get _baseUrl => _productionUrl;
 
   // Singleton pattern
   static final ApiService _instance = ApiService._internal();
@@ -27,14 +27,12 @@ class ApiService {
   final http.Client _client = http.Client();
 
   // Google Sign-In instance for IAP authentication
-  // Configure with your IAP client ID
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    // Set your IAP OAuth client ID here
-    // This should be the OAuth client ID from your IAP configuration
     clientId: kIsWeb
-        ? 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com'
-        : null, // Use default for mobile
+        ? '976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com'
+        : null, // Android uses OAuth client from google-services.json
+    serverClientId: '976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com',
   );
 
   // Cached authentication token
@@ -159,8 +157,19 @@ class ApiService {
           statusCode: response.statusCode,
         );
       } else {
+        // Try to parse error message from response body
+        String errorMsg = 'Failed to submit report: ${response.statusCode}';
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          if (errorData['message'] != null) {
+            errorMsg = errorData['message'];
+          }
+          if (kDebugMode) {
+            print('API Error: ${response.body}');
+          }
+        } catch (_) {}
         return ApiResponse.error(
-          'Failed to submit report: ${response.statusCode}',
+          errorMsg,
           statusCode: response.statusCode,
         );
       }

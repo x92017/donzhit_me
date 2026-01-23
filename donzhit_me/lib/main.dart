@@ -10,11 +10,11 @@ import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const TrafficWatchApp());
+  runApp(const DonzHitMeApp());
 }
 
-class TrafficWatchApp extends StatelessWidget {
-  const TrafficWatchApp({super.key});
+class DonzHitMeApp extends StatelessWidget {
+  const DonzHitMeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class TrafficWatchApp extends StatelessWidget {
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
           return MaterialApp(
-            title: 'Traffic Watch',
+            title: 'DonzHit.me',
             debugShowCheckedModeBanner: false,
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),

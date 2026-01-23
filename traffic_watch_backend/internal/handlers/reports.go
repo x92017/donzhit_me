@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"traffic_watch_backend/internal/middleware"
-	"traffic_watch_backend/internal/models"
-	"traffic_watch_backend/internal/storage"
-	"traffic_watch_backend/internal/validation"
+	"donzhit_me_backend/internal/middleware"
+	"donzhit_me_backend/internal/models"
+	"donzhit_me_backend/internal/storage"
+	"donzhit_me_backend/internal/validation"
 )
 
 // ReportsHandler handles report-related requests

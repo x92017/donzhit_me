@@ -9,7 +9,7 @@ import (
 
 	"cloud.google.com/go/storage"
 
-	"traffic_watch_backend/internal/validation"
+	"donzhit_me_backend/internal/validation"
 )
 
 const (

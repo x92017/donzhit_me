@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"traffic_watch_backend/internal/models"
+	"donzhit_me_backend/internal/models"
 )
 
 const (

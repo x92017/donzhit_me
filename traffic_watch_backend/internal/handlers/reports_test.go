@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"traffic_watch_backend/internal/middleware"
-	"traffic_watch_backend/internal/models"
-	"traffic_watch_backend/internal/validation"
+	"donzhit_me_backend/internal/middleware"
+	"donzhit_me_backend/internal/models"
+	"donzhit_me_backend/internal/validation"
 )
 
 func init() {

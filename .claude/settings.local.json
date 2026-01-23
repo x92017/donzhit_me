@@ -27,7 +27,29 @@
       "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports/37ae0b8d-cfc1-430d-9e67-ce46979cd535'' -Method GET\")",
       "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports/37ae0b8d-cfc1-430d-9e67-ce46979cd535'' -Method DELETE\")",
       "Bash(del:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''https://traffic-watch-backend-stj2wh25xa-uc.a.run.app/v1/reports''\")",
+      "Bash(echo:*)",
+      "Bash(gcloud alpha iap oauth-brands list:*)",
+      "Bash(gcloud run deploy:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(adb kill-server:*)",
+      "Bash(adb start-server:*)",
+      "Bash(adb devices:*)",
+      "Bash(ren traffic_watch donzhit_me)",
+      "Bash(cmd.exe /c \"ren traffic_watch donzhit_me\")",
+      "Bash(cmd.exe /c \"ren traffic_watch_backend donzhit_me_backend\")",
+      "Bash(cmd.exe /c \"dir C:\\\\Users\\\\jeffa\\\\development\\\\claude\\\\donzhit_me\")",
+      "Bash(cmd.exe /c \"dir\")",
+      "Bash(cmd.exe /c \"dir /b\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Users\\\\jeffa\\\\development\\\\claude\\\\donzhit_me'' | Select-Object Name\")",
+      "Bash(powershell.exe -Command \"Rename-Item ''C:\\\\Users\\\\jeffa\\\\development\\\\claude\\\\donzhit_me\\\\traffic_watch'' ''donzhit_me''\")",
+      "Bash(powershell.exe -Command \"Rename-Item ''C:\\\\Users\\\\jeffa\\\\development\\\\claude\\\\donzhit_me\\\\traffic_watch_backend'' ''donzhit_me_backend''\")",
+      "Bash(powershell.exe -Command \"Rename-Item ''C:\\\\Users\\\\jeffa\\\\development\\\\claude\\\\donzhit_me\\\\traffic_watch_backend'' ''donzhit_me_backend'' -Force\")",
+      "Bash(powershell.exe -Command \"Get-Process | Where-Object { $_Path -like ''*traffic_watch*'' }\")",
+      "Bash(flutter test:*)"
     ]
   }
 }

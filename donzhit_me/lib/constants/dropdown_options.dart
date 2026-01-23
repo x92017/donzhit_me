@@ -1,4 +1,4 @@
-/// All dropdown options for the Traffic Watch app
+/// All dropdown options for the DonzHit.me app
 class DropdownOptions {
   // Road Usage Types
   static const List<String> roadUsageTypes = [

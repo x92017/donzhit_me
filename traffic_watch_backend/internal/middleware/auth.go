@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	"traffic_watch_backend/internal/auth"
-	"traffic_watch_backend/internal/models"
+	"donzhit_me_backend/internal/auth"
+	"donzhit_me_backend/internal/models"
 
 	"github.com/gin-gonic/gin"
 )

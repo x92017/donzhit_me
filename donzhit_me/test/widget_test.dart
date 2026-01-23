@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:traffic_watch/main.dart';
+import 'package:donzhit_me/main.dart';
 
 void main() {
   testWidgets('App loads and shows navigation', (WidgetTester tester) async {
-    await tester.pumpWidget(const TrafficWatchApp());
+    await tester.pumpWidget(const DonzHitMeApp());
     await tester.pumpAndSettle();
 
     // Verify that the navigation bar is present
@@ -14,7 +14,7 @@ void main() {
   });
 
   testWidgets('Can navigate to Report screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const TrafficWatchApp());
+    await tester.pumpWidget(const DonzHitMeApp());
     await tester.pumpAndSettle();
 
     // Tap on Report navigation item

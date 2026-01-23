@@ -8,7 +8,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"google.golang.org/api/iterator"
 
-	"traffic_watch_backend/internal/models"
+	"donzhit_me_backend/internal/models"
 )
 
 const (

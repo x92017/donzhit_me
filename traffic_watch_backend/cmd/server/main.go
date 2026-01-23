@@ -11,11 +11,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"traffic_watch_backend/internal/auth"
-	"traffic_watch_backend/internal/handlers"
-	"traffic_watch_backend/internal/middleware"
-	"traffic_watch_backend/internal/storage"
-	"traffic_watch_backend/internal/validation"
+	"donzhit_me_backend/internal/auth"
+	"donzhit_me_backend/internal/handlers"
+	"donzhit_me_backend/internal/middleware"
+	"donzhit_me_backend/internal/storage"
+	"donzhit_me_backend/internal/validation"
 )
 
 const (

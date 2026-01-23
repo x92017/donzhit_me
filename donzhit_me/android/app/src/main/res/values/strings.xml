@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Traffic Watch</string>
+    <string name="app_name">DonzHit.me</string>
     <!-- Google Sign-In server client ID (Web client ID) for ID token -->
     <string name="default_web_client_id">976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com</string>
 </resources>

@@ -1,5 +1,5 @@
-name: traffic_watch
-description: "Traffic Watch - Report traffic violations with video and image evidence"
+name: donzhit_me
+description: "DonzHit.me - Report traffic violations with video and image evidence"
 publish_to: 'none'
 
 version: 1.0.0+1

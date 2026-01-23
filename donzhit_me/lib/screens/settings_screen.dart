@@ -166,7 +166,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Traffic Watch',
+                      'DonzHit.me',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -368,7 +368,7 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Privacy Policy'),
         content: const SingleChildScrollView(
           child: Text(
-            '''Privacy Policy for Traffic Watch
+            '''Privacy Policy for DonzHit.me
 
 Last updated: January 2024
 
@@ -393,7 +393,7 @@ You have the right to:
 - Update your information
 
 5. Contact Us
-For privacy-related inquiries, contact us at privacy@trafficwatch.example.com
+For privacy-related inquiries, contact us at privacy@donzhit.me
 ''',
           ),
         ),
@@ -414,12 +414,12 @@ For privacy-related inquiries, contact us at privacy@trafficwatch.example.com
         title: const Text('Terms of Service'),
         content: const SingleChildScrollView(
           child: Text(
-            '''Terms of Service for Traffic Watch
+            '''Terms of Service for DonzHit.me
 
 Last updated: January 2024
 
 1. Acceptance of Terms
-By using Traffic Watch, you agree to these terms.
+By using DonzHit.me, you agree to these terms.
 
 2. Use of Service
 - You must provide accurate information
@@ -432,7 +432,7 @@ By using Traffic Watch, you agree to these terms.
 - Media must be captured legally and safely
 
 4. Disclaimer
-Traffic Watch is a reporting tool and does not guarantee action on reports.
+DonzHit.me is a reporting tool and does not guarantee action on reports.
 
 5. Limitation of Liability
 We are not liable for any damages arising from the use of this service.
@@ -441,7 +441,7 @@ We are not liable for any damages arising from the use of this service.
 We may update these terms at any time. Continued use constitutes acceptance.
 
 7. Contact
-For questions, contact support@trafficwatch.example.com
+For questions, contact support@donzhit.me
 ''',
           ),
         ),
@@ -478,7 +478,7 @@ For questions, contact support@trafficwatch.example.com
             ListTile(
               leading: const Icon(Icons.email),
               title: const Text('Email Support'),
-              subtitle: const Text('support@trafficwatch.example.com'),
+              subtitle: const Text('support@donzhit.me'),
               onTap: () {
                 // Implement email intent
                 Navigator.pop(context);

@@ -1,4 +1,4 @@
-package com.example.donzhit_me
+package me.donzhit
 
 import io.flutter.embedding.android.FlutterActivity
 

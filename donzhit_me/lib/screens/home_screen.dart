@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/report_provider.dart';
 import '../models/traffic_report.dart';
 import '../services/api_service.dart';
+import '../widgets/donzhit_logo.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -84,21 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.traffic,
-                  color: Colors.white,
-                  size: 40,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'DonzHit.me',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
+                const DonzHitLogoHorizontal(height: 56),
+                const Spacer(),
                 _buildAuthButton(),
               ],
             ),

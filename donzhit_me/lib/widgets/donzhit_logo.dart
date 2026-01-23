@@ -72,50 +72,57 @@ class _LogoPainter extends CustomPainter {
 class DonzHitLogoHorizontal extends StatelessWidget {
   final double height;
 
-  const DonzHitLogoHorizontal({super.key, this.height = 60});
+  const DonzHitLogoHorizontal({super.key, this.height = 72}); // 20% bigger (60 * 1.2)
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.only(left: 4, right: 12, top: 6, bottom: 6),
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Walking person on left
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.hiking,
-                color: Colors.white,
-                size: height * 0.5,
-              ),
-            ],
+          // Walking person on left - 25% bigger, less padding
+          Icon(
+            Icons.hiking,
+            color: Colors.white,
+            size: height * 0.625, // 25% bigger (0.5 * 1.25)
           ),
-          const SizedBox(width: 8),
-          // DonzHit.me text and car in middle
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // DonzHit.me text with car positioned over "onz"
+          Stack(
+            clipBehavior: Clip.none,
             children: [
-              // Car on top
-              Icon(
-                Icons.directions_car,
-                color: Colors.white,
-                size: height * 0.35,
+              // DonzHit.me text - 25% bigger
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Text(
+                  'DonzHit.me',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: height * 0.275, // 25% bigger (0.22 * 1.25)
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
-              // DonzHit.me text
-              Text(
-                'DonzHit.me',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: height * 0.22,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+              // Car on top, positioned over "onz"
+              Positioned(
+                top: -4,
+                left: 14, // Moved 4% left from 18
+                child: Transform(
+                  transform: Matrix4.identity()
+                    ..scale(1.15, 0.85), // 15% wider, 15% flatter
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.directions_car,
+                    color: Colors.white,
+                    size: height * 0.49,
+                  ),
                 ),
               ),
             ],

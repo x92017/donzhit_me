@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -47,16 +48,16 @@ type JWKSet struct {
 
 // IAPValidator validates Google IAP JWT tokens and Google Sign-In ID tokens
 type IAPValidator struct {
-	audience       string
-	oauthClientID  string
-	iapKeys        map[string]*rsa.PublicKey
-	iapKeysExpiry  time.Time
-	oauth2Keys     map[string]*rsa.PublicKey
-	oauth2Expiry   time.Time
-	keysMutex      sync.RWMutex
-	httpClient     *http.Client
-	devMode        bool
-	devUserEmail   string
+	audience        string
+	oauthClientIDs  []string // Multiple client IDs (web, android, ios)
+	iapKeys         map[string]*rsa.PublicKey
+	iapKeysExpiry   time.Time
+	oauth2Keys      map[string]*rsa.PublicKey
+	oauth2Expiry    time.Time
+	keysMutex       sync.RWMutex
+	httpClient      *http.Client
+	devMode         bool
+	devUserEmail    string
 }
 
 // NewIAPValidator creates a new IAP JWT validator
@@ -72,8 +73,15 @@ func NewIAPValidator(audience string, devMode bool) *IAPValidator {
 }
 
 // SetOAuthClientID sets the OAuth2 client ID for Google Sign-In token validation
-func (v *IAPValidator) SetOAuthClientID(clientID string) {
-	v.oauthClientID = clientID
+// Accepts comma-separated list of client IDs (web, android, ios)
+func (v *IAPValidator) SetOAuthClientID(clientIDs string) {
+	if clientIDs == "" {
+		return
+	}
+	v.oauthClientIDs = strings.Split(clientIDs, ",")
+	for i, id := range v.oauthClientIDs {
+		v.oauthClientIDs[i] = strings.TrimSpace(id)
+	}
 }
 
 // SetDevUserEmail sets the email to use in dev mode
@@ -81,7 +89,7 @@ func (v *IAPValidator) SetDevUserEmail(email string) {
 	v.devUserEmail = email
 }
 
-// ValidateToken validates an IAP JWT token or Google Sign-In ID token and returns user info
+// ValidateToken validates an IAP JWT token, Google Sign-In ID token, or Google OAuth access token
 func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models.UserInfo, error) {
 	// In dev mode, return mock user
 	if v.devMode {
@@ -95,10 +103,13 @@ func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models
 		return nil, errors.New("token is empty")
 	}
 
-	// Split the token
+	// Split the token to check format
 	parts := strings.Split(token, ".")
+
+	// If token is not a JWT (doesn't have 3 parts), try validating as an access token
 	if len(parts) != 3 {
-		return nil, errors.New("invalid token format")
+		// Try to validate as Google OAuth access token
+		return v.validateAccessToken(ctx, token)
 	}
 
 	// Decode header
@@ -152,9 +163,18 @@ func (v *IAPValidator) ValidateToken(ctx context.Context, token string) (*models
 			return nil, fmt.Errorf("invalid audience for IAP token: %s", claims.Aud)
 		}
 	} else if isGoogleIDToken {
-		// For Google ID tokens, audience should be the OAuth2 client ID
-		if v.oauthClientID != "" && claims.Aud != v.oauthClientID {
-			return nil, fmt.Errorf("invalid audience for Google ID token: %s (expected: %s)", claims.Aud, v.oauthClientID)
+		// For Google ID tokens, audience should be one of the OAuth2 client IDs
+		if len(v.oauthClientIDs) > 0 {
+			valid := false
+			for _, clientID := range v.oauthClientIDs {
+				if claims.Aud == clientID {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return nil, fmt.Errorf("invalid audience for Google ID token: %s (expected one of: %v)", claims.Aud, v.oauthClientIDs)
+			}
 		}
 	}
 
@@ -363,4 +383,80 @@ func (v *IAPValidator) verifySignature(message, signature string, key *rsa.Publi
 	_ = signature
 	_ = key
 	return nil
+}
+
+// validateAccessToken validates a Google OAuth access token by calling Google's tokeninfo API
+func (v *IAPValidator) validateAccessToken(ctx context.Context, token string) (*models.UserInfo, error) {
+	prefixLen := 20
+	if len(token) < prefixLen {
+		prefixLen = len(token)
+	}
+	log.Printf("validateAccessToken: validating access token (length: %d, prefix: %s...)", len(token), token[:prefixLen])
+
+	// Call Google's tokeninfo endpoint to validate the access token
+	tokenInfoURL := fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?access_token=%s", token)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenInfoURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tokeninfo request: %w", err)
+	}
+
+	resp, err := v.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate access token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("validateAccessToken: tokeninfo returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("invalid access token: status %d", resp.StatusCode)
+	}
+
+	var tokenInfo struct {
+		Azp           string `json:"azp"`
+		Aud           string `json:"aud"`
+		Sub           string `json:"sub"`
+		Scope         string `json:"scope"`
+		Exp           string `json:"exp"`
+		ExpiresIn     string `json:"expires_in"`
+		Email         string `json:"email"`
+		EmailVerified string `json:"email_verified"`
+		AccessType    string `json:"access_type"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
+		return nil, fmt.Errorf("failed to decode tokeninfo response: %w", err)
+	}
+
+	log.Printf("validateAccessToken: tokeninfo response - azp: %s, aud: %s, email: %s, sub: %s",
+		tokenInfo.Azp, tokenInfo.Aud, tokenInfo.Email, tokenInfo.Sub)
+
+	// Verify the token is for our application (if OAuth client IDs are configured)
+	if len(v.oauthClientIDs) > 0 {
+		log.Printf("validateAccessToken: checking audience against oauthClientIDs: %v", v.oauthClientIDs)
+		valid := false
+		for _, clientID := range v.oauthClientIDs {
+			if tokenInfo.Azp == clientID || tokenInfo.Aud == clientID {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			log.Printf("validateAccessToken: audience mismatch!")
+			return nil, fmt.Errorf("access token not issued for this application (azp: %s, aud: %s, expected one of: %v)",
+				tokenInfo.Azp, tokenInfo.Aud, v.oauthClientIDs)
+		}
+	}
+
+	// Verify email is present
+	if tokenInfo.Email == "" {
+		log.Printf("validateAccessToken: no email in token")
+		return nil, errors.New("access token does not contain email")
+	}
+
+	log.Printf("validateAccessToken: success - email: %s", tokenInfo.Email)
+	return &models.UserInfo{
+		Email:   tokenInfo.Email,
+		Subject: tokenInfo.Sub,
+	}, nil
 }

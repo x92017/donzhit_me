@@ -44,6 +44,10 @@ class ApiService {
   bool _isInitialized = false;
   Future<void>? _initializeFuture;
 
+  // Flag to ignore SignOut events during token caching
+  // (Credential Manager can emit spurious SignOut events during authorization)
+  bool _ignoringSignOutEvents = false;
+
   // Auth state change listeners
   final List<VoidCallback> _authStateListeners = [];
   StreamSubscription<GoogleSignInAuthenticationEvent>? _authSubscription;
@@ -66,13 +70,32 @@ class ApiService {
 
   /// Handle authentication events from the new v7.x API
   void _handleAuthenticationEvent(GoogleSignInAuthenticationEvent event) {
+    if (kDebugMode) {
+      print('Auth event received: ${event.runtimeType}');
+    }
     switch (event) {
       case GoogleSignInAuthenticationEventSignIn():
         final user = event.user;
+        if (kDebugMode) {
+          print('SignIn event - email: ${user.email}');
+        }
         _currentUserEmail = user.email;
         _currentUserDisplayName = user.displayName;
+        // Cache token from silent sign-in as well
+        _cacheTokenFromUser(user);
         _notifyAuthStateListeners();
       case GoogleSignInAuthenticationEventSignOut():
+        // Ignore SignOut events during token caching
+        // (Credential Manager can emit spurious SignOut events during authorization)
+        if (_ignoringSignOutEvents) {
+          if (kDebugMode) {
+            print('SignOut event ignored (during token caching)');
+          }
+          return;
+        }
+        if (kDebugMode) {
+          print('SignOut event received - clearing user data');
+        }
         _currentUserEmail = null;
         _currentUserDisplayName = null;
         _cachedToken = null;
@@ -132,6 +155,20 @@ class ApiService {
       if (kDebugMode) {
         print('Google Sign-In result: $result');
       }
+
+      // Store user info directly in case event listener doesn't fire
+      if (result != null) {
+        _currentUserEmail = result.email;
+        _currentUserDisplayName = result.displayName;
+
+        // Get and cache the token immediately after sign-in
+        // This prevents the need to call attemptLightweightAuthentication later
+        // which can trigger spurious SignOut events from Credential Manager
+        await _cacheTokenFromUser(result);
+
+        _notifyAuthStateListeners();
+      }
+
       return result != null;
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -139,6 +176,47 @@ class ApiService {
         print('Stack trace: $stackTrace');
       }
       return false;
+    }
+  }
+
+  /// Cache the token from a signed-in user
+  Future<void> _cacheTokenFromUser(GoogleSignInAccount user) async {
+    // Set flag to ignore SignOut events during authorization
+    // (Credential Manager can emit spurious SignOut events)
+    _ignoringSignOutEvents = true;
+    try {
+      final authClient = user.authorizationClient;
+      if (kDebugMode) {
+        print('Caching token from user during sign-in...');
+      }
+
+      // Request email and profile scopes
+      final scopes = ['email', 'profile'];
+
+      // First check if we already have authorization
+      var authorization = await authClient.authorizationForScopes(scopes);
+
+      // If not, request authorization
+      if (authorization == null) {
+        if (kDebugMode) {
+          print('No existing authorization, requesting new authorization...');
+        }
+        authorization = await authClient.authorizeScopes(scopes);
+      }
+
+      if (authorization != null) {
+        _cachedToken = authorization.accessToken;
+        _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
+        if (kDebugMode) {
+          print('Access token cached: ${_cachedToken?.substring(0, 20)}...');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error caching token during sign-in: $e');
+      }
+    } finally {
+      _ignoringSignOutEvents = false;
     }
   }
 
@@ -173,6 +251,9 @@ class ApiService {
     if (_cachedToken != null &&
         _tokenExpiry != null &&
         _tokenExpiry!.isAfter(DateTime.now().add(const Duration(minutes: 5)))) {
+      if (kDebugMode) {
+        print('Using cached token');
+      }
       return _cachedToken;
     }
 
@@ -181,28 +262,20 @@ class ApiService {
       return 'dev-mode-token';
     }
 
-    // Try to get authentication from current user or attempt lightweight auth
-    try {
-      final user = await _googleSignIn.attemptLightweightAuthentication();
-      if (user == null) {
-        return null;
-      }
-
-      // Get authorization for scopes to access tokens
-      final authClient = user.authorizationClient;
-      final authorization = await authClient.authorizationForScopes(['email', 'profile']);
-
-      if (authorization != null) {
-        _cachedToken = authorization.accessToken;
-        _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
-        return _cachedToken;
-      }
-    } catch (e) {
+    // If not signed in, return null - user needs to sign in first
+    if (!isSignedIn) {
       if (kDebugMode) {
-        print('Error getting IAP token: $e');
+        print('Not signed in, cannot get token');
       }
+      return null;
     }
 
+    // Token expired or not cached - user needs to sign in again
+    // We don't call attemptLightweightAuthentication() here because it can
+    // trigger spurious SignOut events from the Android Credential Manager
+    if (kDebugMode) {
+      print('Token expired or not available. User needs to sign in again.');
+    }
     return null;
   }
 
@@ -216,10 +289,15 @@ class ApiService {
     };
 
     if (token != null) {
-      // IAP expects the JWT in this header
-      headers['X-Goog-IAP-JWT-Assertion'] = token;
-      // Also add standard Authorization header as fallback
+      if (kDebugMode) {
+        print('Using access token for auth');
+      }
+      // Standard Authorization header with Bearer token
       headers['Authorization'] = 'Bearer $token';
+    } else {
+      if (kDebugMode) {
+        print('WARNING: No token available for authentication');
+      }
     }
 
     return headers;
@@ -230,7 +308,13 @@ class ApiService {
   Future<ApiResponse<TrafficReport>> submitReport(TrafficReport report) async {
     try {
       final url = Uri.parse('$_baseUrl/reports');
+      if (kDebugMode) {
+        print('submitReport: Getting headers...');
+      }
       final headers = await _getHeaders();
+      if (kDebugMode) {
+        print('submitReport: Making POST request to $url');
+      }
 
       final response = await _client.post(
         url,
@@ -238,12 +322,20 @@ class ApiService {
         body: jsonEncode(report.toJson()),
       );
 
+      if (kDebugMode) {
+        print('submitReport: Response status ${response.statusCode}');
+        print('submitReport: Response body: ${response.body}');
+      }
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final createdReport = TrafficReport.fromJson(data['data'] ?? data);
         return ApiResponse.success(createdReport);
       } else if (response.statusCode == 401) {
-        // Token expired or invalid, clear cache and retry once
+        // Token expired or invalid, clear cache
+        if (kDebugMode) {
+          print('submitReport: 401 received, clearing token cache');
+        }
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -279,6 +371,9 @@ class ApiService {
     List<File> files,
   ) async {
     try {
+      if (kDebugMode) {
+        print('submitReportWithMedia: Starting upload with ${files.length} files');
+      }
       final url = Uri.parse('$_baseUrl/reports');
       final request = http.MultipartRequest('POST', url);
 
@@ -305,24 +400,44 @@ class ApiService {
       }
 
       // Add headers with IAP authentication
+      if (kDebugMode) {
+        print('submitReportWithMedia: Getting token...');
+      }
       final token = await _getIAPToken();
+      if (kDebugMode) {
+        print('submitReportWithMedia: Token available: ${token != null}');
+      }
       request.headers.addAll({
         'Accept': 'application/json',
       });
 
       if (token != null) {
-        request.headers['X-Goog-IAP-JWT-Assertion'] = token;
         request.headers['Authorization'] = 'Bearer $token';
+      } else {
+        if (kDebugMode) {
+          print('submitReportWithMedia: WARNING - No token available!');
+        }
       }
 
+      if (kDebugMode) {
+        print('submitReportWithMedia: Sending request to $url');
+      }
       final streamedResponse = await _client.send(request);
       final response = await http.Response.fromStream(streamedResponse);
+
+      if (kDebugMode) {
+        print('submitReportWithMedia: Response status ${response.statusCode}');
+        print('submitReportWithMedia: Response body: ${response.body}');
+      }
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final createdReport = TrafficReport.fromJson(data['data'] ?? data);
         return ApiResponse.success(createdReport);
       } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          print('submitReportWithMedia: 401 received, clearing token cache');
+        }
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -336,6 +451,9 @@ class ApiService {
         );
       }
     } catch (e) {
+      if (kDebugMode) {
+        print('submitReportWithMedia: Exception: $e');
+      }
       return ApiResponse.error('Network error: $e');
     }
   }

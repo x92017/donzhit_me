@@ -32,12 +32,23 @@ class _GalleryScreenState extends State<GalleryScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _apiService.initialize();
+    // Listen for auth state changes to update UI when auto sign-in completes
+    _apiService.addAuthStateListener(_onAuthStateChanged);
   }
 
   @override
   void dispose() {
+    _apiService.removeAuthStateListener(_onAuthStateChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    if (mounted) {
+      setState(() {
+        // Rebuild to reflect sign-in state
+      });
+    }
   }
 
   Future<void> _handleSignIn() async {

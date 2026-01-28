@@ -85,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Report traffic violations and help keep our roads safe',
+              'Report pedestrian/traffic violations',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.white.withValues(alpha: 0.9),
                   ),
@@ -130,8 +130,8 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: const Icon(Icons.login, size: 18),
       label: const Text('Sign In'),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
     );

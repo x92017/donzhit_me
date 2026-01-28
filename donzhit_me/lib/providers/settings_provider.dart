@@ -5,7 +5,7 @@ import '../services/storage_service.dart';
 class SettingsProvider with ChangeNotifier {
   final StorageService _storageService = StorageService();
 
-  bool _darkMode = false;
+  bool _darkMode = true; // Default to dark mode
   bool _notifications = true;
   String _defaultState = '';
   bool _autoSaveDraft = true;
@@ -21,7 +21,7 @@ class SettingsProvider with ChangeNotifier {
   /// Initialize settings from storage
   Future<void> init() async {
     final settings = await _storageService.loadSettings();
-    _darkMode = settings['darkMode'] as bool? ?? false;
+    _darkMode = settings['darkMode'] as bool? ?? true; // Default to dark mode
     _notifications = settings['notifications'] as bool? ?? true;
     _defaultState = settings['defaultState'] as String? ?? '';
     _autoSaveDraft = settings['autoSaveDraft'] as bool? ?? true;
@@ -82,7 +82,7 @@ class SettingsProvider with ChangeNotifier {
 
   /// Reset all settings to defaults
   Future<void> resetSettings() async {
-    _darkMode = false;
+    _darkMode = true; // Default to dark mode
     _notifications = true;
     _defaultState = '';
     _autoSaveDraft = true;

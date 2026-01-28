@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "976110980114",
+    "project_id": "donzhit-me",
+    "storage_bucket": "donzhit-me.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:976110980114:android:donzhitme",
+        "android_client_info": {
+          "package_name": "me.donzhit"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "976110980114-04gpc066enpctp21svq6qdjdpbluki52.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "me.donzhit",
+            "certificate_hash": "441964049441298864ba599d402ea7109294a503"
+          }
+        },
+        {
+          "client_id": "976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": ""
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

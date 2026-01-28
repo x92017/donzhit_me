@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,9 @@ import '../models/sample_videos.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../constants/dropdown_options.dart';
+import '../services/api_service.dart';
+import '../widgets/donzhit_logo.dart';
+import '../widgets/platform_sign_in_button.dart';
 import 'video_player_screen.dart';
 import 'image_viewer_screen.dart';
 
@@ -20,11 +24,14 @@ class _GalleryScreenState extends State<GalleryScreen>
   late TabController _tabController;
   String _selectedCategory = 'All';
   String? _selectedState;
+  final ApiService _apiService = ApiService();
+  bool _isSigningIn = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _apiService.initialize();
   }
 
   @override
@@ -33,25 +40,131 @@ class _GalleryScreenState extends State<GalleryScreen>
     super.dispose();
   }
 
+  Future<void> _handleSignIn() async {
+    debugPrint('=== Sign-in button pressed ===');
+    setState(() => _isSigningIn = true);
+    try {
+      final success = await _apiService.signIn();
+      debugPrint('=== Sign-in completed: $success ===');
+    } catch (e) {
+      debugPrint('=== Sign-in exception: $e ===');
+    } finally {
+      if (mounted) {
+        setState(() => _isSigningIn = false);
+      }
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    await _apiService.signOut();
+    setState(() {});
+  }
+
+  Widget _buildAuthButton() {
+    if (_isSigningIn) {
+      return const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2,
+        ),
+      );
+    }
+
+    if (_apiService.isSignedIn) {
+      return IconButton(
+        icon: const Icon(Icons.logout, color: Colors.white),
+        onPressed: _handleSignOut,
+        tooltip: 'Sign out',
+      );
+    }
+
+    // On web, use the Google-rendered sign-in button
+    if (kIsWeb) {
+      return buildGoogleSignInButton();
+    }
+
+    // On mobile platforms, use a custom button
+    return ElevatedButton.icon(
+      onPressed: _handleSignIn,
+      icon: const Icon(Icons.login, size: 18),
+      label: const Text('Sign In'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    debugPrint('=== GalleryScreen build called ===');
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Media Gallery'),
-        bottom: TabBar(
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverToBoxAdapter(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const DonzHitLogoHorizontal(height: 56),
+                          const Spacer(),
+                          _buildAuthButton(),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Report pedestrian/traffic violations',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.9),
+                            ),
+                      ),
+                      if (_apiService.isSignedIn) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Signed in as ${_apiService.userEmail}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverTabBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  tabs: const [
+                    Tab(icon: Icon(Icons.play_circle), text: 'Sample Videos'),
+                    Tab(icon: Icon(Icons.photo_library), text: 'My Media'),
+                  ],
+                ),
+              ),
+            ),
+          ];
+        },
+        body: TabBarView(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.play_circle), text: 'Sample Videos'),
-            Tab(icon: Icon(Icons.photo_library), text: 'My Media'),
+          children: [
+            _buildSampleVideosTab(),
+            _buildMyMediaTab(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildSampleVideosTab(),
-          _buildMyMediaTab(),
-        ],
       ),
     );
   }
@@ -507,5 +620,30 @@ class _MediaThumbnail extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  _SliverTabBarDelegate(this.tabBar);
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
+    return tabBar != oldDelegate.tabBar;
   }
 }

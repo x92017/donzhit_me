@@ -3,16 +3,15 @@ import 'package:provider/provider.dart';
 import '../providers/report_provider.dart';
 import '../models/traffic_report.dart';
 import '../services/api_service.dart';
-import '../widgets/donzhit_logo.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class AdminScreen extends StatefulWidget {
+  const AdminScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _AdminScreenState extends State<AdminScreen> {
   final ApiService _apiService = ApiService();
   bool _isSigningIn = false;
 
@@ -78,14 +77,26 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Row(
               children: [
-                const DonzHitLogoHorizontal(height: 56),
+                const Icon(
+                  Icons.admin_panel_settings,
+                  color: Colors.white,
+                  size: 40,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Admin Dashboard',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
                 const Spacer(),
                 _buildAuthButton(),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              'Report pedestrian/traffic violations',
+              'Manage reports and system settings',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.white.withValues(alpha: 0.9),
                   ),

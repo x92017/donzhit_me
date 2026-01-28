@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, VoidCallback;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/traffic_report.dart';
 
@@ -26,44 +27,116 @@ class ApiService {
   // HTTP client
   final http.Client _client = http.Client();
 
-  // Google Sign-In instance for IAP authentication
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email', 'profile'],
-    clientId: kIsWeb
-        ? '976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com'
-        : null, // Android uses OAuth client from google-services.json
-    serverClientId: '976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com',
-  );
+  // Google Sign-In instance (v7.x API)
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+
+  // Client IDs for Google Sign-In
+  static const String _webClientId =
+      '976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com';
 
   // Cached authentication token
   String? _cachedToken;
   DateTime? _tokenExpiry;
 
-  // Current signed-in user
-  GoogleSignInAccount? _currentUser;
+  // Current signed-in user info
+  String? _currentUserEmail;
+  String? _currentUserDisplayName;
+  bool _isInitialized = false;
+  Future<void>? _initializeFuture;
 
-  /// Initialize the service and attempt silent sign-in
-  Future<void> initialize() async {
-    _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
-      _currentUser = account;
-      if (account == null) {
+  // Auth state change listeners
+  final List<VoidCallback> _authStateListeners = [];
+  StreamSubscription<GoogleSignInAuthenticationEvent>? _authSubscription;
+
+  /// Add a listener to be notified when auth state changes
+  void addAuthStateListener(VoidCallback listener) {
+    _authStateListeners.add(listener);
+  }
+
+  /// Remove an auth state listener
+  void removeAuthStateListener(VoidCallback listener) {
+    _authStateListeners.remove(listener);
+  }
+
+  void _notifyAuthStateListeners() {
+    for (final listener in _authStateListeners) {
+      listener();
+    }
+  }
+
+  /// Handle authentication events from the new v7.x API
+  void _handleAuthenticationEvent(GoogleSignInAuthenticationEvent event) {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn():
+        final user = event.user;
+        _currentUserEmail = user.email;
+        _currentUserDisplayName = user.displayName;
+        _notifyAuthStateListeners();
+      case GoogleSignInAuthenticationEventSignOut():
+        _currentUserEmail = null;
+        _currentUserDisplayName = null;
         _cachedToken = null;
         _tokenExpiry = null;
-      }
-    });
+        _notifyAuthStateListeners();
+    }
+  }
 
-    // Try silent sign-in
-    await _googleSignIn.signInSilently();
+  /// Initialize the service and attempt silent sign-in
+  Future<void> initialize() {
+    // Return existing future if already initializing or initialized
+    if (_initializeFuture != null) return _initializeFuture!;
+
+    _initializeFuture = _doInitialize();
+    return _initializeFuture!;
+  }
+
+  Future<void> _doInitialize() async {
+    if (_isInitialized) return;
+
+    try {
+      // Initialize Google Sign-In with client IDs (v7.x API)
+      // Note: serverClientId is not supported on Web
+      await _googleSignIn.initialize(
+        clientId: kIsWeb ? _webClientId : null,
+        serverClientId: kIsWeb ? null : _webClientId,
+      );
+
+      // Listen to authentication events
+      _authSubscription = _googleSignIn.authenticationEvents.listen(
+        _handleAuthenticationEvent,
+        onError: (error) {
+          if (kDebugMode) {
+            print('Google Sign-In stream error: $error');
+          }
+        },
+      );
+
+      // Try lightweight (silent) authentication
+      await _googleSignIn.attemptLightweightAuthentication();
+
+      _isInitialized = true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Google Sign-In initialization error: $e');
+      }
+    }
   }
 
   /// Sign in with Google
   Future<bool> signIn() async {
     try {
-      final account = await _googleSignIn.signIn();
-      return account != null;
-    } catch (e) {
+      if (kDebugMode) {
+        print('Starting Google Sign-In authenticate()...');
+      }
+      final result = await _googleSignIn.authenticate();
+      if (kDebugMode) {
+        print('Google Sign-In result: $result');
+      }
+      return result != null;
+    } catch (e, stackTrace) {
       if (kDebugMode) {
         print('Google Sign-In error: $e');
+        print('Stack trace: $stackTrace');
       }
       return false;
     }
@@ -71,16 +144,28 @@ class ApiService {
 
   /// Sign out
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    await _googleSignIn.disconnect();
+    _currentUserEmail = null;
+    _currentUserDisplayName = null;
     _cachedToken = null;
     _tokenExpiry = null;
+    _notifyAuthStateListeners();
   }
 
   /// Check if user is signed in
-  bool get isSignedIn => _currentUser != null;
+  bool get isSignedIn => _currentUserEmail != null;
 
   /// Get current user email
-  String? get userEmail => _currentUser?.email;
+  String? get userEmail => _currentUserEmail;
+
+  /// Get current user display name
+  String? get userDisplayName => _currentUserDisplayName;
+
+  /// Admin email for entitlement checks
+  static const String _adminEmail = 'jeffarbaugh@gmail.com';
+
+  /// Check if current user is an admin
+  bool get isAdmin => _currentUserEmail == _adminEmail;
 
   /// Get IAP JWT token for authentication
   Future<String?> _getIAPToken() async {
@@ -96,20 +181,29 @@ class ApiService {
       return 'dev-mode-token';
     }
 
-    // Get fresh authentication
-    final account = _currentUser ?? await _googleSignIn.signInSilently();
-    if (account == null) {
-      return null;
+    // Try to get authentication from current user or attempt lightweight auth
+    try {
+      final user = await _googleSignIn.attemptLightweightAuthentication();
+      if (user == null) {
+        return null;
+      }
+
+      // Get authorization for scopes to access tokens
+      final authClient = user.authorizationClient;
+      final authorization = await authClient.authorizationForScopes(['email', 'profile']);
+
+      if (authorization != null) {
+        _cachedToken = authorization.accessToken;
+        _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
+        return _cachedToken;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting IAP token: $e');
+      }
     }
 
-    final auth = await account.authentication;
-
-    // The ID token can be used for IAP authentication
-    // For production, you might need to exchange this for an IAP-specific token
-    _cachedToken = auth.idToken;
-    _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
-
-    return _cachedToken;
+    return null;
   }
 
   /// Get headers with IAP authentication
@@ -351,6 +445,7 @@ class ApiService {
 
   /// Dispose the client when done
   void dispose() {
+    _authSubscription?.cancel();
     _client.close();
   }
 }

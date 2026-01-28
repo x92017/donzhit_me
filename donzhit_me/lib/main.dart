@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/settings_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/admin_screen.dart';
 import 'screens/report_form_screen.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/api_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -116,21 +117,101 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  final ApiService _apiService = ApiService();
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    ReportFormScreen(),
-    GalleryScreen(),
-    HistoryScreen(),
-    SettingsScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _apiService.initialize();
+    _apiService.addAuthStateListener(_onAuthStateChanged);
+  }
+
+  @override
+  void dispose() {
+    _apiService.removeAuthStateListener(_onAuthStateChanged);
+    super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    setState(() {
+      // Rebuild navigation when auth state changes
+      // Reset index if admin tab is no longer available
+      final screenCount = _apiService.isAdmin ? 5 : 4;
+      if (_currentIndex >= screenCount) {
+        _currentIndex = 0;
+      }
+    });
+  }
+
+  List<Widget> _buildScreens() {
+    debugPrint('Building screens - isAdmin: ${_apiService.isAdmin}, isSignedIn: ${_apiService.isSignedIn}, email: ${_apiService.userEmail}');
+    final screens = <Widget>[
+      const GalleryScreen(), // Home (was Gallery)
+      const ReportFormScreen(),
+      const HistoryScreen(),
+      const SettingsScreen(),
+    ];
+
+    // Only add Admin screen for admin user
+    if (_apiService.isAdmin) {
+      screens.add(const AdminScreen());
+    }
+
+    return screens;
+  }
+
+  List<NavigationDestination> _buildDestinations() {
+    final destinations = <NavigationDestination>[
+      const NavigationDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home),
+        label: 'Home',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.add_circle_outline),
+        selectedIcon: Icon(Icons.add_circle),
+        label: 'Report',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.history_outlined),
+        selectedIcon: Icon(Icons.history),
+        label: 'History',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.settings_outlined),
+        selectedIcon: Icon(Icons.settings),
+        label: 'Settings',
+      ),
+    ];
+
+    // Only add Admin destination for admin user
+    if (_apiService.isAdmin) {
+      destinations.add(
+        const NavigationDestination(
+          icon: Icon(Icons.admin_panel_settings_outlined),
+          selectedIcon: Icon(Icons.admin_panel_settings),
+          label: 'Admin',
+        ),
+      );
+    }
+
+    return destinations;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final screens = _buildScreens();
+    final destinations = _buildDestinations();
+
+    // Ensure current index is valid when admin status changes
+    if (_currentIndex >= screens.length) {
+      _currentIndex = 0;
+    }
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -139,33 +220,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _currentIndex = index;
           });
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.add_circle_outline),
-            selectedIcon: Icon(Icons.add_circle),
-            label: 'Report',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.video_library_outlined),
-            selectedIcon: Icon(Icons.video_library),
-            label: 'Gallery',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'History',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
+        destinations: destinations,
       ),
     );
   }

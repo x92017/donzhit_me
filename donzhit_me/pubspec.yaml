@@ -17,7 +17,7 @@ dependencies:
   http: ^1.2.0
 
   # File picker for selecting images/videos
-  file_picker: ^8.0.0
+  file_picker: ^10.3.10
 
   # Image picker for camera/gallery access
   image_picker: ^1.0.7
@@ -44,16 +44,16 @@ dependencies:
   uuid: ^4.3.3
 
   # Date/time formatting
-  intl: ^0.19.0
+  intl: ^0.20.2
 
   # Path provider for file storage
   path_provider: ^2.1.2
 
   # Mime type detection
-  mime: ^1.0.5
+  mime: ^2.0.0
 
   # Google Sign-In for IAP authentication
-  google_sign_in: ^6.2.1
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:

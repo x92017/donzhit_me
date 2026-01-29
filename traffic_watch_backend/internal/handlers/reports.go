@@ -18,15 +18,17 @@ import (
 
 // ReportsHandler handles report-related requests
 type ReportsHandler struct {
-	firestore *storage.FirestoreClient
-	gcs       *storage.GCSClient
+	storage storage.Client
+	gcs     *storage.GCSClient
+	youtube *storage.YouTubeClient
 }
 
 // NewReportsHandler creates a new reports handler
-func NewReportsHandler(firestore *storage.FirestoreClient, gcs *storage.GCSClient) *ReportsHandler {
+func NewReportsHandler(storageClient storage.Client, gcs *storage.GCSClient, youtube *storage.YouTubeClient) *ReportsHandler {
 	return &ReportsHandler{
-		firestore: firestore,
-		gcs:       gcs,
+		storage: storageClient,
+		gcs:     gcs,
+		youtube: youtube,
 	}
 }
 
@@ -76,7 +78,7 @@ func (h *ReportsHandler) createReportJSON(c *gin.Context, user *models.UserInfo)
 		Status:      models.StatusActive,
 	}
 
-	if err := h.firestore.CreateReport(c.Request.Context(), report); err != nil {
+	if err := h.storage.CreateReport(c.Request.Context(), report); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "create_failed",
 			"message": "failed to create report",
@@ -195,42 +197,49 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 			}
 			safeFileName := validation.SanitizeFileName(fileHeader.Filename)
 
-			// Upload to GCS
-			log.Printf("Uploading file %s to GCS", fileHeader.Filename)
-			objectPath, err := h.gcs.UploadFile(
-				c.Request.Context(),
-				user.Subject,
-				reportID,
-				fileID,
-				contentType,
-				file,
-			)
-			file.Close()
+			var mediaFile models.MediaFile
 
-			if err != nil {
-				log.Printf("GCS upload failed for %s: %v", fileHeader.Filename, err)
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error":   "upload_failed",
-					"message": "failed to upload file to storage",
-				})
-				return
+			// Check if it's a video and YouTube client is available
+			if storage.IsVideoContentType(contentType) && h.youtube != nil {
+				log.Printf("Uploading video %s to YouTube", fileHeader.Filename)
+
+				// Create video title and description
+				videoTitle := fmt.Sprintf("%s - %s", title, safeFileName)
+				videoDesc := fmt.Sprintf("Traffic incident report: %s\n\nUploaded via DonzHit.me", description)
+
+				result, err := h.youtube.UploadVideo(c.Request.Context(), videoTitle, videoDesc, file, contentType)
+				file.Close()
+
+				if err != nil {
+					log.Printf("YouTube upload failed for %s: %v, falling back to GCS", fileHeader.Filename, err)
+					// Fall back to GCS on YouTube failure
+					file, _ = fileHeader.Open()
+					mediaFile, err = h.uploadToGCS(c, user, reportID, fileID, contentType, safeFileName, fileHeader.Size, file)
+					file.Close()
+					if err != nil {
+						return // Error response already sent
+					}
+				} else {
+					log.Printf("Video uploaded to YouTube: %s", result.URL)
+					mediaFile = models.MediaFile{
+						ID:          result.VideoID, // Use YouTube video ID
+						FileName:    safeFileName,
+						ContentType: contentType,
+						Size:        fileHeader.Size,
+						URL:         result.URL,
+						UploadedAt:  time.Now(),
+					}
+				}
+			} else {
+				// Upload images (and videos if no YouTube client) to GCS
+				mediaFile, err = h.uploadToGCS(c, user, reportID, fileID, contentType, safeFileName, fileHeader.Size, file)
+				file.Close()
+				if err != nil {
+					return // Error response already sent
+				}
 			}
-			log.Printf("File uploaded successfully to %s", objectPath)
 
-			// Generate signed URL
-			signedURL, err := h.gcs.GetSignedURL(c.Request.Context(), objectPath, 0)
-			if err != nil {
-				signedURL = "" // URL will be generated on demand
-			}
-
-			mediaFiles = append(mediaFiles, models.MediaFile{
-				ID:          fileID,
-				FileName:    safeFileName,
-				ContentType: contentType,
-				Size:        fileHeader.Size,
-				URL:         signedURL,
-				UploadedAt:  time.Now(),
-			})
+			mediaFiles = append(mediaFiles, mediaFile)
 		}
 	}
 
@@ -248,9 +257,9 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 		Status:      models.StatusActive,
 	}
 
-	log.Printf("Creating report %s in Firestore for user %s", reportID, user.Email)
-	if err := h.firestore.CreateReport(c.Request.Context(), report); err != nil {
-		log.Printf("Firestore create failed for report %s: %v", reportID, err)
+	log.Printf("Creating report %s in storage for user %s", reportID, user.Email)
+	if err := h.storage.CreateReport(c.Request.Context(), report); err != nil {
+		log.Printf("Storage create failed for report %s: %v", reportID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "create_failed",
 			"message": "failed to create report",
@@ -262,6 +271,58 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	c.JSON(http.StatusCreated, report)
 }
 
+// uploadToGCS uploads a file to Google Cloud Storage
+func (h *ReportsHandler) uploadToGCS(c *gin.Context, user *models.UserInfo, reportID, fileID, contentType, safeFileName string, size int64, file interface{}) (models.MediaFile, error) {
+	log.Printf("Uploading file %s to GCS", safeFileName)
+
+	reader, ok := file.(interface{ Read([]byte) (int, error) })
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "upload_failed",
+			"message": "failed to read file",
+		})
+		return models.MediaFile{}, fmt.Errorf("invalid file reader")
+	}
+
+	objectPath, err := h.gcs.UploadFile(
+		c.Request.Context(),
+		user.Subject,
+		reportID,
+		fileID,
+		contentType,
+		reader,
+	)
+	if err != nil {
+		log.Printf("GCS upload failed for %s: %v", safeFileName, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "upload_failed",
+			"message": "failed to upload file to storage",
+		})
+		return models.MediaFile{}, err
+	}
+	log.Printf("File uploaded successfully to %s", objectPath)
+
+	// Generate signed URL
+	signedURL, err := h.gcs.GetSignedURL(c.Request.Context(), objectPath, 0)
+	if err != nil {
+		signedURL = "" // URL will be generated on demand
+	}
+
+	return models.MediaFile{
+		ID:          fileID,
+		FileName:    safeFileName,
+		ContentType: contentType,
+		Size:        size,
+		URL:         signedURL,
+		UploadedAt:  time.Now(),
+	}, nil
+}
+
+// isYouTubeURL checks if a URL is a YouTube URL
+func isYouTubeURL(url string) bool {
+	return strings.Contains(url, "youtube.com") || strings.Contains(url, "youtu.be")
+}
+
 // ListReports handles GET /v1/reports
 func (h *ReportsHandler) ListReports(c *gin.Context) {
 	user := middleware.RequireUser(c)
@@ -269,7 +330,7 @@ func (h *ReportsHandler) ListReports(c *gin.Context) {
 		return
 	}
 
-	reports, err := h.firestore.ListReportsByUser(c.Request.Context(), user.Subject)
+	reports, err := h.storage.ListReportsByUser(c.Request.Context(), user.Subject)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "fetch_failed",
@@ -282,9 +343,14 @@ func (h *ReportsHandler) ListReports(c *gin.Context) {
 		reports = []models.TrafficReport{}
 	}
 
-	// Refresh signed URLs for media files
+	// Refresh signed URLs for GCS media files (skip YouTube URLs)
 	for i := range reports {
 		for j := range reports[i].MediaFiles {
+			// Skip YouTube URLs - they don't need signed URLs
+			if isYouTubeURL(reports[i].MediaFiles[j].URL) {
+				continue
+			}
+
 			objectPath := fmt.Sprintf("users/%s/reports/%s/%s",
 				user.Subject,
 				reports[i].ID,
@@ -319,7 +385,7 @@ func (h *ReportsHandler) GetReport(c *gin.Context) {
 		return
 	}
 
-	report, err := h.firestore.GetReportByIDAndUser(c.Request.Context(), reportID, user.Subject)
+	report, err := h.storage.GetReportByIDAndUser(c.Request.Context(), reportID, user.Subject)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "not_found",
@@ -328,8 +394,13 @@ func (h *ReportsHandler) GetReport(c *gin.Context) {
 		return
 	}
 
-	// Refresh signed URLs for media files
+	// Refresh signed URLs for GCS media files (skip YouTube URLs)
 	for i := range report.MediaFiles {
+		// Skip YouTube URLs - they don't need signed URLs
+		if isYouTubeURL(report.MediaFiles[i].URL) {
+			continue
+		}
+
 		objectPath := fmt.Sprintf("users/%s/reports/%s/%s",
 			user.Subject,
 			report.ID,
@@ -361,7 +432,7 @@ func (h *ReportsHandler) DeleteReport(c *gin.Context) {
 	}
 
 	// Verify ownership and delete
-	if err := h.firestore.DeleteReport(c.Request.Context(), reportID, user.Subject); err != nil {
+	if err := h.storage.DeleteReport(c.Request.Context(), reportID, user.Subject); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "not_found",
 			"message": "report not found",
@@ -369,7 +440,7 @@ func (h *ReportsHandler) DeleteReport(c *gin.Context) {
 		return
 	}
 
-	// Note: We don't delete files from GCS immediately for soft delete
+	// Note: We don't delete files from GCS/YouTube immediately for soft delete
 	// A separate cleanup job could handle permanent deletions
 
 	c.JSON(http.StatusOK, gin.H{

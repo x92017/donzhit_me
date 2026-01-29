@@ -31,6 +31,19 @@ func main() {
 	oauthClientID := getEnv("OAUTH_CLIENT_ID", "")
 	devMode := getEnv("DEV_MODE", "false") == "true"
 
+	// Database configuration
+	dbType := getEnv("DB_TYPE", "firestore") // "firestore" or "postgres"
+	dbConnectionString := getEnv("DB_CONNECTION_STRING", "")
+	cloudSQLInstance := getEnv("CLOUD_SQL_INSTANCE", "")
+	dbName := getEnv("DB_NAME", "donzhit")
+	dbUser := getEnv("DB_USER", "donzhit_app")
+	dbPassword := getEnv("DB_PASSWORD", "")
+
+	// YouTube configuration
+	youtubeClientID := getEnv("YOUTUBE_CLIENT_ID", "")
+	youtubeClientSecret := getEnv("YOUTUBE_CLIENT_SECRET", "")
+	youtubeRefreshToken := getEnv("YOUTUBE_REFRESH_TOKEN", "")
+
 	// Set Gin mode
 	if devMode {
 		gin.SetMode(gin.DebugMode)
@@ -53,32 +66,79 @@ func main() {
 	}
 
 	// Initialize storage clients
-	var firestoreClient *storage.FirestoreClient
+	var storageClient storage.Client
 	var gcsClient *storage.GCSClient
+	var youtubeClient *storage.YouTubeClient
 	var err error
 
-	// Always initialize storage if project ID is set
-	if projectID != "" {
-		firestoreClient, err = storage.NewFirestoreClient(ctx, projectID)
+	// Initialize database storage based on DB_TYPE
+	switch dbType {
+	case "postgres":
+		log.Printf("Initializing PostgreSQL storage backend")
+		if dbConnectionString != "" {
+			// Use direct connection string (for local development)
+			storageClient, err = storage.NewPostgresClientFromConnString(ctx, dbConnectionString)
+			if err != nil {
+				log.Fatalf("Failed to create PostgreSQL client from connection string: %v", err)
+			}
+			log.Printf("PostgreSQL client initialized using connection string")
+		} else if cloudSQLInstance != "" {
+			// Use Cloud SQL connector (for production)
+			storageClient, err = storage.NewPostgresClient(ctx, cloudSQLInstance, dbUser, dbPassword, dbName)
+			if err != nil {
+				log.Fatalf("Failed to create PostgreSQL client via Cloud SQL: %v", err)
+			}
+			log.Printf("PostgreSQL client initialized via Cloud SQL connector (instance: %s)", cloudSQLInstance)
+		} else {
+			log.Fatalf("DB_TYPE=postgres requires either DB_CONNECTION_STRING or CLOUD_SQL_INSTANCE to be set")
+		}
+
+	case "firestore":
+		fallthrough
+	default:
+		if dbType != "firestore" {
+			log.Printf("WARNING: Unknown DB_TYPE '%s', falling back to Firestore", dbType)
+		}
+		log.Printf("Initializing Firestore storage backend")
+		if projectID == "" {
+			log.Fatalf("GOOGLE_CLOUD_PROJECT is required for Firestore backend")
+		}
+		firestoreClient, err := storage.NewFirestoreClient(ctx, projectID)
 		if err != nil {
 			log.Fatalf("Failed to create Firestore client: %v", err)
 		}
-		defer firestoreClient.Close()
+		storageClient = firestoreClient
+		log.Printf("Firestore client initialized (project: %s)", projectID)
+	}
+	defer storageClient.Close()
 
+	// Initialize GCS client (needed for image storage)
+	if bucketName != "" {
 		gcsClient, err = storage.NewGCSClient(ctx, bucketName)
 		if err != nil {
 			log.Fatalf("Failed to create GCS client: %v", err)
 		}
 		defer gcsClient.Close()
-
-		log.Printf("Storage clients initialized (project: %s, bucket: %s)", projectID, bucketName)
+		log.Printf("GCS client initialized (bucket: %s)", bucketName)
 	} else {
-		log.Println("WARNING: GOOGLE_CLOUD_PROJECT not set - storage clients not initialized")
+		log.Println("WARNING: GCS_BUCKET not set - image uploads will not work")
+	}
+
+	// Initialize YouTube client (for video uploads)
+	if youtubeClientID != "" && youtubeClientSecret != "" && youtubeRefreshToken != "" {
+		youtubeClient, err = storage.NewYouTubeClient(ctx, youtubeClientID, youtubeClientSecret, youtubeRefreshToken)
+		if err != nil {
+			log.Printf("WARNING: Failed to create YouTube client: %v - video uploads will fall back to GCS", err)
+		} else {
+			log.Printf("YouTube client initialized for video uploads")
+		}
+	} else {
+		log.Println("WARNING: YouTube credentials not configured - video uploads will use GCS")
 	}
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
-	reportsHandler := handlers.NewReportsHandler(firestoreClient, gcsClient)
+	reportsHandler := handlers.NewReportsHandler(storageClient, gcsClient, youtubeClient)
 
 	// Create Gin router
 	router := gin.New()
@@ -111,13 +171,13 @@ func main() {
 		Addr:         ":" + port,
 		Handler:      router,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 300 * time.Second, // Increased for video uploads
 		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Starting server on port %s (version %s, dev mode: %v)", port, version, devMode)
+		log.Printf("Starting server on port %s (version %s, dev mode: %v, db: %s)", port, version, devMode, dbType)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}

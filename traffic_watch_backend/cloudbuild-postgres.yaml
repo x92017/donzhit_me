@@ -1,16 +1,16 @@
-# Cloud Build configuration for Traffic Watch Backend
-# This pipeline builds and deploys the Go backend to Cloud Run
+# Cloud Build configuration for Traffic Watch Backend (PostgreSQL)
+# This pipeline builds and deploys the Go backend to Cloud Run with Cloud SQL PostgreSQL
 #
-# For PostgreSQL deployment, run:
+# Usage:
 #   gcloud builds submit --config=cloudbuild-postgres.yaml
-#
-# For Firestore deployment (default), run:
-#   gcloud builds submit --config=cloudbuild.yaml
 
 substitutions:
   _SERVICE_NAME: traffic-watch-backend
   _REGION: us-central1
   _GCS_BUCKET: me-donzhit-1-traffic-watch-media
+  _CLOUD_SQL_INSTANCE: me-donzhit-1:us-central1:donzhit-postgres
+  _DB_NAME: donzhit
+  _DB_USER: donzhit_app
 
 steps:
   # Build the container image
@@ -34,7 +34,7 @@ steps:
       - 'push'
       - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
 
-  # Deploy container image to Cloud Run (Firestore backend)
+  # Deploy container image to Cloud Run (PostgreSQL backend)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -48,7 +48,10 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=^@^GOOGLE_CLOUD_PROJECT=$PROJECT_ID@GCS_BUCKET=${_GCS_BUCKET}@OAUTH_CLIENT_ID=976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com,976110980114-04gpc066enpctp21svq6qdjdpbluki52.apps.googleusercontent.com@DB_TYPE=firestore'
+      - '--add-cloudsql-instances'
+      - '${_CLOUD_SQL_INSTANCE}'
+      - '--set-env-vars=^@^GOOGLE_CLOUD_PROJECT=$PROJECT_ID@GCS_BUCKET=${_GCS_BUCKET}@OAUTH_CLIENT_ID=976110980114-fvr3a1snaptljv5ei3o297kep52eof9u.apps.googleusercontent.com,976110980114-04gpc066enpctp21svq6qdjdpbluki52.apps.googleusercontent.com@DB_TYPE=postgres@CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}@DB_NAME=${_DB_NAME}@DB_USER=${_DB_USER}'
+      - '--set-secrets=DB_PASSWORD=donzhit-db-password:latest,YOUTUBE_CLIENT_ID=youtube-client-id:latest,YOUTUBE_CLIENT_SECRET=youtube-client-secret:latest,YOUTUBE_REFRESH_TOKEN=youtube-refresh-token:latest'
       - '--memory'
       - '512Mi'
       - '--cpu'
@@ -59,7 +62,6 @@ steps:
       - '10'
       - '--timeout'
       - '300'
-      - '--set-secrets=YOUTUBE_CLIENT_ID=youtube-client-id:latest,YOUTUBE_CLIENT_SECRET=youtube-client-secret:latest,YOUTUBE_REFRESH_TOKEN=youtube-refresh-token:latest'
       - '--concurrency'
       - '80'
 

@@ -1,0 +1,15 @@
+# Ignore compiled binary (only in root)
+/server
+
+# Ignore git
+.git
+.gitignore
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore test files
+*_test.go

@@ -455,11 +455,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _openMedia(MediaFile media, List<MediaFile> allMedia) {
     if (media.isVideo) {
+      // Check if this is a YouTube video
+      final youtubeId = _extractYouTubeId(media.url);
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => VideoPlayerScreen(
-            videoPath: media.path,
+            videoPath: youtubeId == null ? media.path : null,
+            videoUrl: youtubeId == null && media.path.isEmpty ? media.url : null,
+            youtubeVideoId: youtubeId,
             title: media.name,
           ),
         ),
@@ -525,6 +530,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
       case ReportStatus.reviewed:
         return Colors.purple;
     }
+  }
+
+  /// Extract YouTube video ID from a URL
+  String? _extractYouTubeId(String? url) {
+    if (url == null) return null;
+
+    // Match youtube.com/watch?v=VIDEO_ID
+    final watchMatch = RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (watchMatch != null) return watchMatch.group(1);
+
+    // Match youtu.be/VIDEO_ID
+    final shortMatch = RegExp(r'youtu\.be/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (shortMatch != null) return shortMatch.group(1);
+
+    // Match youtube.com/embed/VIDEO_ID
+    final embedMatch = RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (embedMatch != null) return embedMatch.group(1);
+
+    return null;
   }
 }
 

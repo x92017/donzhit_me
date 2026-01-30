@@ -81,9 +81,10 @@ class ApiService {
         }
         _currentUserEmail = user.email;
         _currentUserDisplayName = user.displayName;
-        // Cache token from silent sign-in as well
-        _cacheTokenFromUser(user);
-        _notifyAuthStateListeners();
+        // Cache token from silent sign-in, then notify listeners
+        _cacheTokenFromUser(user).then((_) {
+          _notifyAuthStateListeners();
+        });
       case GoogleSignInAuthenticationEventSignOut():
         // Ignore SignOut events during token caching
         // (Credential Manager can emit spurious SignOut events during authorization)
@@ -157,18 +158,16 @@ class ApiService {
       }
 
       // Store user info directly in case event listener doesn't fire
-      if (result != null) {
-        _currentUserEmail = result.email;
-        _currentUserDisplayName = result.displayName;
+      _currentUserEmail = result.email;
+      _currentUserDisplayName = result.displayName;
 
-        // Get and cache the token immediately after sign-in
-        // This prevents the need to call attemptLightweightAuthentication later
-        // which can trigger spurious SignOut events from Credential Manager
-        await _cacheTokenFromUser(result);
+      // Get and cache the token immediately after sign-in
+      // This prevents the need to call attemptLightweightAuthentication later
+      // which can trigger spurious SignOut events from Credential Manager
+      await _cacheTokenFromUser(result);
 
-        _notifyAuthStateListeners();
-      }
-
+      _notifyAuthStateListeners();
+    
       return result != null;
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -204,14 +203,12 @@ class ApiService {
         authorization = await authClient.authorizeScopes(scopes);
       }
 
-      if (authorization != null) {
-        _cachedToken = authorization.accessToken;
-        _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
-        if (kDebugMode) {
-          print('Access token cached: ${_cachedToken?.substring(0, 20)}...');
-        }
+      _cachedToken = authorization.accessToken;
+      _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
+      if (kDebugMode) {
+        print('Access token cached: ${_cachedToken?.substring(0, 20)}...');
       }
-    } catch (e) {
+        } catch (e) {
       if (kDebugMode) {
         print('Error caching token during sign-in: $e');
       }

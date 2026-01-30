@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -454,6 +455,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _openMedia(MediaFile media, List<MediaFile> allMedia) {
+    debugPrint('_openMedia: name=${media.name}, path=${media.path}, url=${media.url}, isVideo=${media.isVideo}');
+
     if (media.isVideo) {
       // Check if this is a YouTube video
       final youtubeId = _extractYouTubeId(media.url);
@@ -462,7 +465,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => VideoPlayerScreen(
-            videoPath: youtubeId == null ? media.path : null,
+            videoPath: youtubeId == null && media.path.isNotEmpty ? media.path : null,
             videoUrl: youtubeId == null && media.path.isEmpty ? media.url : null,
             youtubeVideoId: youtubeId,
             title: media.name,
@@ -470,17 +473,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       );
     } else {
-      final imagePaths = allMedia
+      // Use URL for remote images, path for local images
+      final imageUrls = allMedia
           .where((m) => m.isImage)
-          .map((m) => m.path)
+          .map((m) => m.path.isNotEmpty ? m.path : (m.url ?? ''))
+          .where((url) => url.isNotEmpty)
           .toList();
-      final imageIndex = imagePaths.indexOf(media.path);
+      final currentImageUrl = media.path.isNotEmpty ? media.path : (media.url ?? '');
+      final imageIndex = imageUrls.indexOf(currentImageUrl);
 
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ImageViewerScreen(
-            allImages: imagePaths,
+            allImages: imageUrls,
             initialIndex: imageIndex >= 0 ? imageIndex : 0,
             title: media.name,
           ),

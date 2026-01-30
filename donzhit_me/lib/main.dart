@@ -133,6 +133,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _onAuthStateChanged() {
+    if (!mounted) return;
+
     setState(() {
       // Rebuild navigation when auth state changes
       // Reset index if admin tab is no longer available
@@ -141,6 +143,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         _currentIndex = 0;
       }
     });
+
+    // Fetch reports from server when user signs in
+    if (_apiService.isSignedIn) {
+      context.read<ReportProvider>().fetchReports();
+    }
   }
 
   List<Widget> _buildScreens() {

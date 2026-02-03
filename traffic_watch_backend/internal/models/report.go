@@ -24,17 +24,21 @@ type TrafficReport struct {
 	RoadUsage   string      `json:"roadUsage" binding:"required,roadusage" firestore:"roadUsage"`
 	EventType   string      `json:"eventType" binding:"required,eventtype" firestore:"eventType"`
 	State       string      `json:"state" binding:"required,stateorprovince" firestore:"state"`
+	City        string      `json:"city" firestore:"city"`
 	Injuries    string      `json:"injuries" binding:"max=1000" firestore:"injuries"`
-	MediaFiles  []MediaFile `json:"mediaFiles" firestore:"mediaFiles"`
-	CreatedAt   time.Time   `json:"createdAt" firestore:"createdAt"`
-	UpdatedAt   time.Time   `json:"updatedAt" firestore:"updatedAt"`
-	Status      string      `json:"status" firestore:"status"`
+	MediaFiles   []MediaFile `json:"mediaFiles" firestore:"mediaFiles"`
+	CreatedAt    time.Time   `json:"createdAt" firestore:"createdAt"`
+	UpdatedAt    time.Time   `json:"updatedAt" firestore:"updatedAt"`
+	Status       string      `json:"status" firestore:"status"`
+	ReviewReason string      `json:"reviewReason,omitempty" firestore:"review_reason"`
 }
 
 // ReportStatus constants
 const (
-	StatusActive  = "active"
-	StatusDeleted = "deleted"
+	StatusSubmitted    = "submitted"      // New report awaiting review
+	StatusReviewedPass = "reviewed_pass"  // Admin approved
+	StatusReviewedFail = "reviewed_fail"  // Admin rejected
+	StatusDeleted      = "deleted"        // Soft deleted
 )
 
 // CreateReportRequest represents the request body for creating a report
@@ -45,6 +49,7 @@ type CreateReportRequest struct {
 	RoadUsage   string    `json:"roadUsage" binding:"required,roadusage"`
 	EventType   string    `json:"eventType" binding:"required,eventtype"`
 	State       string    `json:"state" binding:"required,stateorprovince"`
+	City        string    `json:"city"`
 	Injuries    string    `json:"injuries" binding:"max=1000"`
 }
 

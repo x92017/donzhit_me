@@ -14,6 +14,7 @@ import (
 	"donzhit_me_backend/internal/auth"
 	"donzhit_me_backend/internal/handlers"
 	"donzhit_me_backend/internal/middleware"
+	"donzhit_me_backend/internal/models"
 	"donzhit_me_backend/internal/storage"
 	"donzhit_me_backend/internal/validation"
 )
@@ -43,6 +44,10 @@ func main() {
 	youtubeClientID := getEnv("YOUTUBE_CLIENT_ID", "")
 	youtubeClientSecret := getEnv("YOUTUBE_CLIENT_SECRET", "")
 	youtubeRefreshToken := getEnv("YOUTUBE_REFRESH_TOKEN", "")
+
+	// JWT configuration
+	jwtSecret := getEnv("JWT_SECRET", "change-this-in-production-use-256-bit-key")
+	jwtIssuer := getEnv("JWT_ISSUER", "donzhit.me")
 
 	// Set Gin mode
 	if devMode {
@@ -136,9 +141,14 @@ func main() {
 		log.Println("WARNING: YouTube credentials not configured - video uploads will use GCS")
 	}
 
+	// Initialize JWT service
+	jwtService := auth.NewJWTService(jwtSecret, jwtIssuer)
+	log.Printf("JWT service initialized (issuer: %s)", jwtIssuer)
+
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
 	reportsHandler := handlers.NewReportsHandler(storageClient, gcsClient, youtubeClient)
+	authHandler := handlers.NewAuthHandler(storageClient, iapValidator, jwtService)
 
 	// Create Gin router
 	router := gin.New()
@@ -154,15 +164,57 @@ func main() {
 		// Health check (no auth required)
 		v1.GET("/health", healthHandler.Health)
 
-		// Protected routes
-		protected := v1.Group("")
-		protected.Use(middleware.IAPAuth(iapValidator))
+		// Public endpoints (no auth required)
+		publicGroup := v1.Group("/public")
+		{
+			publicGroup.GET("/reports", reportsHandler.ListApprovedReports)
+		}
+
+		// Auth endpoints (login requires Google token, not JWT)
+		authGroup := v1.Group("/auth")
+		{
+			authGroup.POST("/login", authHandler.Login)
+		}
+
+		// Protected auth endpoints (requires JWT)
+		authProtected := v1.Group("/auth")
+		authProtected.Use(middleware.JWTAuth(jwtService, storageClient))
+		{
+			authProtected.GET("/me", authHandler.GetCurrentUser)
+			authProtected.POST("/logout", authHandler.Logout)
+		}
+
+		// Protected routes with JWT auth (for new JWT-based clients)
+		jwtProtected := v1.Group("")
+		jwtProtected.Use(middleware.JWTAuth(jwtService, storageClient))
+		jwtProtected.Use(middleware.RequireRole(models.RoleContributor))
 		{
 			// Reports endpoints
-			protected.POST("/reports", reportsHandler.CreateReport)
-			protected.GET("/reports", reportsHandler.ListReports)
-			protected.GET("/reports/:id", reportsHandler.GetReport)
-			protected.DELETE("/reports/:id", reportsHandler.DeleteReport)
+			jwtProtected.POST("/reports", reportsHandler.CreateReport)
+			jwtProtected.GET("/reports", reportsHandler.ListReports)
+			jwtProtected.GET("/reports/:id", reportsHandler.GetReport)
+			jwtProtected.DELETE("/reports/:id", reportsHandler.DeleteReport)
+		}
+
+		// Admin routes (requires JWT + admin role)
+		adminGroup := v1.Group("/admin")
+		adminGroup.Use(middleware.JWTAuth(jwtService, storageClient))
+		adminGroup.Use(middleware.RequireRole(models.RoleAdmin))
+		{
+			adminGroup.GET("/reports", reportsHandler.ListAllReportsAdmin)
+			adminGroup.GET("/reports/review", reportsHandler.ListReportsForReview)
+			adminGroup.POST("/reports/:id/review", reportsHandler.ReviewReport)
+		}
+
+		// Legacy protected routes with Google token auth (for backwards compatibility)
+		// TODO: Remove after all clients migrate to JWT
+		legacyProtected := v1.Group("/legacy")
+		legacyProtected.Use(middleware.IAPAuth(iapValidator))
+		{
+			legacyProtected.POST("/reports", reportsHandler.CreateReport)
+			legacyProtected.GET("/reports", reportsHandler.ListReports)
+			legacyProtected.GET("/reports/:id", reportsHandler.GetReport)
+			legacyProtected.DELETE("/reports/:id", reportsHandler.DeleteReport)
 		}
 	}
 

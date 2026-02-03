@@ -181,6 +181,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           playedColor: Theme.of(context).colorScheme.primary,
           handleColor: Theme.of(context).colorScheme.primary,
         ),
+        width: double.infinity,
         onReady: () {
           setState(() {
             _isLoading = false;
@@ -193,23 +194,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       builder: (context, player) {
         return Scaffold(
           backgroundColor: Colors.black,
+          extendBodyBehindAppBar: true,
           appBar: AppBar(
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.transparent,
             foregroundColor: Colors.white,
+            elevation: 0,
             title: Text(
               _title,
               style: const TextStyle(fontSize: 16),
             ),
           ),
-          body: Column(
-            children: [
-              // Video player
-              player,
-
-              // Video info
-              if (widget.sampleVideo != null) _buildVideoInfo(),
-            ],
-          ),
+          body: widget.sampleVideo != null
+              ? Column(
+                  children: [
+                    player,
+                    _buildVideoInfo(),
+                  ],
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SizedBox(
+                      width: constraints.maxWidth,
+                      height: constraints.maxHeight,
+                      child: player,
+                    );
+                  },
+                ),
         );
       },
     );

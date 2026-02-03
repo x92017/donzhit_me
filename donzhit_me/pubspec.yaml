@@ -40,6 +40,9 @@ dependencies:
   # Local storage for caching reports
   shared_preferences: ^2.2.2
 
+  # Secure storage for JWT tokens
+  flutter_secure_storage: ^9.2.2
+
   # UUID generation for unique IDs
   uuid: ^4.3.3
 
@@ -54,6 +57,9 @@ dependencies:
 
   # Google Sign-In for IAP authentication
   google_sign_in: ^7.2.0
+
+  # Google Places API for city autocomplete
+  google_places_flutter: ^2.0.8
 
 dev_dependencies:
   flutter_test:

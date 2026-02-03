@@ -5,10 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
+import 'package:google_places_flutter/model/place_type.dart';
 import '../constants/dropdown_options.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/places_service.dart';
 
 class ReportFormScreen extends StatefulWidget {
   const ReportFormScreen({super.key});
@@ -22,13 +26,15 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _injuriesController = TextEditingController();
+  final _cityController = TextEditingController();
 
   DateTime _selectedDateTime = DateTime.now();
   String? _selectedRoadUsage;
   String? _selectedEventType;
   String? _selectedState;
+  String? _selectedCity;
 
-  List<XFile> _selectedMedia = [];
+  final List<XFile> _selectedMedia = [];
   bool _isSubmitting = false;
 
   @override
@@ -49,6 +55,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       _selectedRoadUsage = draft.roadUsage;
       _selectedEventType = draft.eventType;
       _selectedState = draft.state;
+      _selectedCity = draft.city.isNotEmpty ? draft.city : null;
+      _cityController.text = draft.city;
     }
   }
 
@@ -64,6 +72,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _injuriesController.dispose();
+    _cityController.dispose();
     super.dispose();
   }
 
@@ -124,7 +133,12 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
               // State Dropdown
               _buildStateDropdown(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // City Autocomplete (only shows when state is selected)
+              if (_selectedState != null) _buildCityAutocomplete(),
+              if (_selectedState != null) const SizedBox(height: 24),
+              if (_selectedState == null) const SizedBox(height: 8),
 
               // Additional Info Section
               _buildSectionTitle('Additional Information'),
@@ -267,7 +281,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   Widget _buildRoadUsageDropdown() {
     return DropdownButtonFormField<String>(
-      value: _selectedRoadUsage,
+      initialValue: _selectedRoadUsage,
       decoration: const InputDecoration(
         labelText: 'Road Usage',
         prefixIcon: Icon(Icons.directions_car),
@@ -295,7 +309,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   Widget _buildEventTypeDropdown() {
     return DropdownButtonFormField<String>(
-      value: _selectedEventType,
+      initialValue: _selectedEventType,
       decoration: const InputDecoration(
         labelText: 'Event Type',
         prefixIcon: Icon(Icons.warning_amber),
@@ -323,7 +337,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   Widget _buildStateDropdown() {
     return DropdownButtonFormField<String>(
-      value: _selectedState,
+      initialValue: _selectedState,
       decoration: const InputDecoration(
         labelText: 'State/Province',
         prefixIcon: Icon(Icons.location_on),
@@ -339,6 +353,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       onChanged: (value) {
         setState(() {
           _selectedState = value;
+          // Clear city when state changes
+          _selectedCity = null;
+          _cityController.clear();
         });
       },
       validator: (value) {
@@ -347,6 +364,65 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
         }
         return null;
       },
+    );
+  }
+
+  Widget _buildCityAutocomplete() {
+    final countryCode = _selectedState != null
+        ? PlacesService.getCountryCode(_selectedState!)
+        : null;
+
+    return GooglePlaceAutoCompleteTextField(
+      textEditingController: _cityController,
+      googleAPIKey: PlacesService.apiKey,
+      inputDecoration: InputDecoration(
+        labelText: 'City (Optional)',
+        hintText: 'Search for a city',
+        prefixIcon: const Icon(Icons.location_city),
+        border: const OutlineInputBorder(),
+        suffixIcon: _cityController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  setState(() {
+                    _selectedCity = null;
+                    _cityController.clear();
+                  });
+                },
+              )
+            : null,
+      ),
+      debounceTime: 400,
+      countries: countryCode != null ? [countryCode] : ['us', 'ca'],
+      isLatLngRequired: false,
+      getPlaceDetailWithLatLng: (Prediction prediction) {
+        // Extract city name from the prediction
+        setState(() {
+          _selectedCity = prediction.structuredFormatting?.mainText ??
+              prediction.description;
+        });
+      },
+      itemClick: (Prediction prediction) {
+        _cityController.text =
+            prediction.structuredFormatting?.mainText ?? prediction.description ?? '';
+        _cityController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _cityController.text.length),
+        );
+        setState(() {
+          _selectedCity = prediction.structuredFormatting?.mainText ??
+              prediction.description;
+        });
+      },
+      itemBuilder: (context, index, Prediction prediction) {
+        return ListTile(
+          leading: const Icon(Icons.location_on),
+          title: Text(prediction.structuredFormatting?.mainText ?? ''),
+          subtitle: Text(prediction.structuredFormatting?.secondaryText ?? ''),
+        );
+      },
+      seperatedBuilder: const Divider(height: 1),
+      isCrossBtnShown: false,
+      placeType: PlaceType.cities,
     );
   }
 
@@ -702,10 +778,12 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       _titleController.clear();
       _descriptionController.clear();
       _injuriesController.clear();
+      _cityController.clear();
       _selectedDateTime = DateTime.now();
       _selectedRoadUsage = null;
       _selectedEventType = null;
       _selectedState = null;
+      _selectedCity = null;
       _selectedMedia.clear();
     });
 
@@ -720,6 +798,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       roadUsage: _selectedRoadUsage ?? '',
       eventType: _selectedEventType ?? '',
       state: _selectedState ?? '',
+      city: _selectedCity ?? '',
       injuries: _injuriesController.text,
       mediaFiles: _selectedMedia
           .map((f) => MediaFile(

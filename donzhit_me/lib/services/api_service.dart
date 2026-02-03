@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, VoidCallback;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/traffic_report.dart';
+import '../models/user.dart';
+import 'auth_service.dart';
 
 /// API Service for handling RESTful operations with Google IAP authentication
 class ApiService {
@@ -26,6 +28,9 @@ class ApiService {
 
   // HTTP client
   final http.Client _client = http.Client();
+
+  // Auth service for JWT storage
+  final AuthService _authService = AuthService();
 
   // Google Sign-In instance (v7.x API)
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
@@ -81,8 +86,29 @@ class ApiService {
         }
         _currentUserEmail = user.email;
         _currentUserDisplayName = user.displayName;
-        // Cache token from silent sign-in, then notify listeners
-        _cacheTokenFromUser(user).then((_) {
+        // Cache token from silent sign-in, then exchange for JWT
+        _cacheTokenFromUser(user).then((_) async {
+          // Exchange Google token for JWT
+          if (_cachedToken != null) {
+            if (kDebugMode) {
+              print('Auto sign-in: Attempting JWT login...');
+            }
+            final loginSuccess = await _login(_cachedToken!);
+            if (loginSuccess) {
+              // Update email from JWT user info
+              final jwtUser = _authService.currentUser;
+              if (jwtUser != null) {
+                _currentUserEmail = jwtUser.email;
+              }
+              if (kDebugMode) {
+                print('Auto sign-in: JWT login succeeded');
+              }
+            } else {
+              if (kDebugMode) {
+                print('Auto sign-in: JWT login failed, using Google token');
+              }
+            }
+          }
           _notifyAuthStateListeners();
         });
       case GoogleSignInAuthenticationEventSignOut():
@@ -118,6 +144,20 @@ class ApiService {
     if (_isInitialized) return;
 
     try {
+      // Initialize AuthService first (loads cached JWT)
+      await _authService.initialize();
+
+      // If we have a valid JWT, restore user state
+      final user = _authService.currentUser;
+      if (user != null) {
+        _currentUserEmail = user.email;
+        if (kDebugMode) {
+          print('Restored user from JWT: ${user.email}, role: ${user.role}');
+        }
+        // Notify listeners that user is already signed in
+        _notifyAuthStateListeners();
+      }
+
       // Initialize Google Sign-In with client IDs (v7.x API)
       // Note: serverClientId is not supported on Web
       await _googleSignIn.initialize(
@@ -135,8 +175,10 @@ class ApiService {
         },
       );
 
-      // Try lightweight (silent) authentication
-      await _googleSignIn.attemptLightweightAuthentication();
+      // Only try silent Google auth if we don't already have a valid JWT
+      if (user == null) {
+        await _googleSignIn.attemptLightweightAuthentication();
+      }
 
       _isInitialized = true;
     } catch (e) {
@@ -146,7 +188,7 @@ class ApiService {
     }
   }
 
-  /// Sign in with Google
+  /// Sign in with Google and exchange for JWT
   Future<bool> signIn() async {
     try {
       if (kDebugMode) {
@@ -161,14 +203,40 @@ class ApiService {
       _currentUserEmail = result.email;
       _currentUserDisplayName = result.displayName;
 
-      // Get and cache the token immediately after sign-in
-      // This prevents the need to call attemptLightweightAuthentication later
-      // which can trigger spurious SignOut events from Credential Manager
+      // Get and cache the Google token
       await _cacheTokenFromUser(result);
 
+      // Exchange Google token for DonzHit.me JWT
+      if (_cachedToken != null) {
+        if (kDebugMode) {
+          print('=== Attempting JWT login with Google token ===');
+          print('Google token length: ${_cachedToken!.length}');
+        }
+        final loginSuccess = await _login(_cachedToken!);
+        if (!loginSuccess) {
+          if (kDebugMode) {
+            print('=== JWT login FAILED, falling back to Google token ===');
+          }
+          // Fall back to using Google token directly if JWT login fails
+        } else {
+          if (kDebugMode) {
+            print('=== JWT login SUCCEEDED ===');
+          }
+          // Update email from JWT user info (more authoritative)
+          final user = _authService.currentUser;
+          if (user != null) {
+            _currentUserEmail = user.email;
+          }
+        }
+      } else {
+        if (kDebugMode) {
+          print('=== WARNING: No Google token cached, cannot exchange for JWT ===');
+        }
+      }
+
       _notifyAuthStateListeners();
-    
-      return result != null;
+
+      return true;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('Google Sign-In error: $e');
@@ -217,8 +285,81 @@ class ApiService {
     }
   }
 
+  /// Exchange Google token for DonzHit.me JWT
+  Future<bool> _login(String googleToken) async {
+    try {
+      final url = Uri.parse('$_baseUrl/auth/login');
+      if (kDebugMode) {
+        print('=== _login() called ===');
+        print('Login URL: $url');
+        print('Google token length: ${googleToken.length}');
+        print('Making POST request...');
+      }
+
+      final response = await _client.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'googleToken': googleToken}),
+      );
+
+      if (kDebugMode) {
+        print('Login response status: ${response.statusCode}');
+        print('Login response body: ${response.body}');
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final token = data['token'] as String;
+        final expiresAt = data['expiresAt'] as int;
+        final userData = data['user'] as Map<String, dynamic>;
+        final user = User.fromJson(userData);
+
+        if (kDebugMode) {
+          print('Received JWT from backend (length: ${token.length})');
+          print('JWT preview: ${token.substring(0, token.length > 50 ? 50 : token.length)}...');
+          print('User: ${user.email}, role: ${user.role}');
+          print('Expires at: $expiresAt (${DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)})');
+        }
+
+        // Save JWT and user info
+        await _authService.saveAuth(
+          token: token,
+          user: user,
+          expiresAt: expiresAt,
+        );
+
+        // Verify it was saved correctly
+        final savedToken = await _authService.getToken();
+        if (kDebugMode) {
+          print('Verified saved token: ${savedToken != null ? "OK (${savedToken.length} chars)" : "FAILED"}');
+        }
+
+        return true;
+      } else {
+        if (kDebugMode) {
+          print('Login failed: ${response.statusCode} - ${response.body}');
+        }
+        return false;
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('=== Login EXCEPTION ===');
+        print('Error: $e');
+        print('Stack trace: $stackTrace');
+      }
+      return false;
+    }
+  }
+
   /// Sign out
   Future<void> signOut() async {
+    // Clear JWT first
+    await _authService.clearAuth();
+
+    // Disconnect from Google
     await _googleSignIn.disconnect();
     _currentUserEmail = null;
     _currentUserDisplayName = null;
@@ -227,29 +368,52 @@ class ApiService {
     _notifyAuthStateListeners();
   }
 
-  /// Check if user is signed in
-  bool get isSignedIn => _currentUserEmail != null;
+  /// Check if user is signed in (has valid JWT)
+  bool get isSignedIn => _authService.currentUser != null || _currentUserEmail != null;
 
   /// Get current user email
-  String? get userEmail => _currentUserEmail;
+  String? get userEmail => _authService.userEmail ?? _currentUserEmail;
 
   /// Get current user display name
   String? get userDisplayName => _currentUserDisplayName;
 
-  /// Admin email for entitlement checks
-  static const String _adminEmail = 'jeffarbaugh@gmail.com';
+  /// Get current user (from JWT)
+  User? get currentUser => _authService.currentUser;
+
+  /// Get current user's role
+  UserRole? get userRole => _authService.userRole;
 
   /// Check if current user is an admin
-  bool get isAdmin => _currentUserEmail == _adminEmail;
+  bool get isAdmin => _authService.isAdmin;
 
-  /// Get IAP JWT token for authentication
-  Future<String?> _getIAPToken() async {
-    // Return cached token if still valid (with 5 minute buffer)
+  /// Check if current user is a contributor or higher
+  bool get isContributor => _authService.isContributor;
+
+  /// Get JWT token for authentication
+  /// Prefers DonzHit.me JWT, falls back to Google token
+  Future<String?> _getAuthToken() async {
+    // First, try to get JWT from AuthService
+    final jwt = await _authService.getToken();
+    if (jwt != null) {
+      if (kDebugMode) {
+        print('Using JWT from AuthService (length: ${jwt.length})');
+        print('JWT preview: ${jwt.substring(0, jwt.length > 50 ? 50 : jwt.length)}...');
+      }
+      return jwt;
+    }
+
+    if (kDebugMode) {
+      print('No JWT available from AuthService');
+      print('AuthService currentUser: ${_authService.currentUser?.email}');
+      print('AuthService userRole: ${_authService.userRole}');
+    }
+
+    // Fallback: Return cached Google token if still valid (for backwards compatibility)
     if (_cachedToken != null &&
         _tokenExpiry != null &&
         _tokenExpiry!.isAfter(DateTime.now().add(const Duration(minutes: 5)))) {
       if (kDebugMode) {
-        print('Using cached token');
+        print('Using cached Google token (fallback)');
       }
       return _cachedToken;
     }
@@ -268,17 +432,15 @@ class ApiService {
     }
 
     // Token expired or not cached - user needs to sign in again
-    // We don't call attemptLightweightAuthentication() here because it can
-    // trigger spurious SignOut events from the Android Credential Manager
     if (kDebugMode) {
       print('Token expired or not available. User needs to sign in again.');
     }
     return null;
   }
 
-  /// Get headers with IAP authentication
+  /// Get headers with JWT authentication
   Future<Map<String, String>> _getHeaders() async {
-    final token = await _getIAPToken();
+    final token = await _getAuthToken();
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -333,6 +495,7 @@ class ApiService {
         if (kDebugMode) {
           print('submitReport: 401 received, clearing token cache');
         }
+        await _authService.clearAuth();
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -381,6 +544,7 @@ class ApiService {
       request.fields['roadUsage'] = report.roadUsage;
       request.fields['eventType'] = report.eventType;
       request.fields['state'] = report.state;
+      request.fields['city'] = report.city;
       request.fields['injuries'] = report.injuries;
 
       // Add files with the field name expected by the backend
@@ -396,11 +560,11 @@ class ApiService {
         }
       }
 
-      // Add headers with IAP authentication
+      // Add headers with JWT authentication
       if (kDebugMode) {
         print('submitReportWithMedia: Getting token...');
       }
-      final token = await _getIAPToken();
+      final token = await _getAuthToken();
       if (kDebugMode) {
         print('submitReportWithMedia: Token available: ${token != null}');
       }
@@ -435,6 +599,7 @@ class ApiService {
         if (kDebugMode) {
           print('submitReportWithMedia: 401 received, clearing token cache');
         }
+        await _authService.clearAuth();
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -472,6 +637,7 @@ class ApiService {
             .toList();
         return ApiResponse.success(reports);
       } else if (response.statusCode == 401) {
+        await _authService.clearAuth();
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -502,6 +668,7 @@ class ApiService {
         final report = TrafficReport.fromJson(data['data'] ?? data);
         return ApiResponse.success(report);
       } else if (response.statusCode == 401) {
+        await _authService.clearAuth();
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -530,6 +697,7 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 204) {
         return ApiResponse.success(null);
       } else if (response.statusCode == 401) {
+        await _authService.clearAuth();
         _cachedToken = null;
         _tokenExpiry = null;
         return ApiResponse.error(
@@ -555,6 +723,171 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  // ============================================================================
+  // Public Endpoints (no auth required)
+  // ============================================================================
+
+  /// GET approved reports for public feed (no auth required)
+  Future<ApiResponse<List<TrafficReport>>> getApprovedReports() async {
+    try {
+      final url = Uri.parse('$_baseUrl/public/reports');
+
+      final response = await _client.get(url, headers: {
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final reportsList = data['reports'] ?? data['data'] ?? [];
+        final reports = (reportsList as List<dynamic>)
+            .map((r) => TrafficReport.fromJson(r as Map<String, dynamic>))
+            .toList();
+        return ApiResponse.success(reports);
+      } else {
+        return ApiResponse.error(
+          'Failed to fetch approved reports: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  // ============================================================================
+  // Admin Endpoints
+  // ============================================================================
+
+  /// GET all reports for admin dashboard (requires admin role)
+  Future<ApiResponse<List<TrafficReport>>> getAllReportsAdmin() async {
+    try {
+      final url = Uri.parse('$_baseUrl/admin/reports');
+      final headers = await _getHeaders();
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final reportsList = data['reports'] ?? data['data'] ?? [];
+        final reports = (reportsList as List<dynamic>)
+            .map((r) => TrafficReport.fromJson(r as Map<String, dynamic>))
+            .toList();
+        return ApiResponse.success(reports);
+      } else if (response.statusCode == 401) {
+        await _authService.clearAuth();
+        _cachedToken = null;
+        _tokenExpiry = null;
+        return ApiResponse.error(
+          'Authentication required. Please sign in again.',
+          statusCode: response.statusCode,
+        );
+      } else if (response.statusCode == 403) {
+        return ApiResponse.error(
+          'Admin access required.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to fetch admin reports: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// GET reports awaiting review (requires admin role)
+  Future<ApiResponse<List<TrafficReport>>> getReportsForReview() async {
+    try {
+      final url = Uri.parse('$_baseUrl/admin/reports/review');
+      final headers = await _getHeaders();
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final reportsList = data['reports'] ?? data['data'] ?? [];
+        final reports = (reportsList as List<dynamic>)
+            .map((r) => TrafficReport.fromJson(r as Map<String, dynamic>))
+            .toList();
+        return ApiResponse.success(reports);
+      } else if (response.statusCode == 401) {
+        await _authService.clearAuth();
+        _cachedToken = null;
+        _tokenExpiry = null;
+        return ApiResponse.error(
+          'Authentication required. Please sign in again.',
+          statusCode: response.statusCode,
+        );
+      } else if (response.statusCode == 403) {
+        return ApiResponse.error(
+          'Admin access required.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to fetch review queue: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// POST approve or reject a report (requires admin role)
+  Future<ApiResponse<void>> reviewReport(
+    String reportId, {
+    required bool approve,
+    String? reason,
+  }) async {
+    try {
+      final url = Uri.parse('$_baseUrl/admin/reports/$reportId/review');
+      final headers = await _getHeaders();
+
+      final body = {
+        'status': approve ? 'reviewed_pass' : 'reviewed_fail',
+        if (reason != null) 'reason': reason,
+      };
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return ApiResponse.success(null);
+      } else if (response.statusCode == 401) {
+        await _authService.clearAuth();
+        _cachedToken = null;
+        _tokenExpiry = null;
+        return ApiResponse.error(
+          'Authentication required. Please sign in again.',
+          statusCode: response.statusCode,
+        );
+      } else if (response.statusCode == 403) {
+        return ApiResponse.error(
+          'Admin access required.',
+          statusCode: response.statusCode,
+        );
+      } else if (response.statusCode == 404) {
+        return ApiResponse.error(
+          'Report not found.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to review report: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
     }
   }
 

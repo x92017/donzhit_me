@@ -137,8 +137,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     setState(() {
       // Rebuild navigation when auth state changes
-      // Reset index if admin tab is no longer available
-      final screenCount = _apiService.isAdmin ? 5 : 4;
+      // Determine screen count based on role:
+      // - Viewer (not signed in): 2 screens (Home, Settings)
+      // - Contributor: 4 screens (Home, Report, History, Settings)
+      // - Admin: 5 screens (+ Admin)
+      int screenCount;
+      if (!_apiService.isSignedIn) {
+        screenCount = 2;
+      } else if (_apiService.isAdmin) {
+        screenCount = 5;
+      } else {
+        screenCount = 4;
+      }
+
+      // Reset index if current tab is no longer available
       if (_currentIndex >= screenCount) {
         _currentIndex = 0;
       }
@@ -151,16 +163,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   List<Widget> _buildScreens() {
-    debugPrint('Building screens - isAdmin: ${_apiService.isAdmin}, isSignedIn: ${_apiService.isSignedIn}, email: ${_apiService.userEmail}');
+    final isSignedIn = _apiService.isSignedIn;
+    final isAdmin = _apiService.isAdmin;
+    debugPrint('Building screens - isAdmin: $isAdmin, isSignedIn: $isSignedIn, email: ${_apiService.userEmail}, role: ${_apiService.userRole}');
+
+    // Viewer (not signed in): Home and Settings (NavigationBar requires >= 2 destinations)
+    if (!isSignedIn) {
+      return const [
+        GalleryScreen(),
+        SettingsScreen(),
+      ];
+    }
+
+    // Contributor (signed in): Home, Report, History, Settings
     final screens = <Widget>[
-      const GalleryScreen(), // Home (was Gallery)
+      const GalleryScreen(),
       const ReportFormScreen(),
       const HistoryScreen(),
       const SettingsScreen(),
     ];
 
-    // Only add Admin screen for admin user
-    if (_apiService.isAdmin) {
+    // Admin: Add Admin screen
+    if (isAdmin) {
       screens.add(const AdminScreen());
     }
 
@@ -168,6 +192,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   List<NavigationDestination> _buildDestinations() {
+    final isSignedIn = _apiService.isSignedIn;
+    final isAdmin = _apiService.isAdmin;
+
+    // Viewer (not signed in): Home and Settings (NavigationBar requires >= 2 destinations)
+    if (!isSignedIn) {
+      return const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
+          label: 'Settings',
+        ),
+      ];
+    }
+
+    // Contributor (signed in): Home, Report, History, Settings
     final destinations = <NavigationDestination>[
       const NavigationDestination(
         icon: Icon(Icons.home_outlined),
@@ -191,8 +235,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
     ];
 
-    // Only add Admin destination for admin user
-    if (_apiService.isAdmin) {
+    // Admin: Add Admin destination
+    if (isAdmin) {
       destinations.add(
         const NavigationDestination(
           icon: Icon(Icons.admin_panel_settings_outlined),

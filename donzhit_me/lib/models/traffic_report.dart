@@ -9,10 +9,12 @@ class TrafficReport {
   final String roadUsage;
   final String eventType;
   final String state;
+  final String city;
   final String injuries;
   final List<MediaFile> mediaFiles;
   final DateTime? createdAt;
   final ReportStatus status;
+  final String? reviewReason;
 
   TrafficReport({
     this.id,
@@ -22,10 +24,12 @@ class TrafficReport {
     required this.roadUsage,
     required this.eventType,
     required this.state,
+    this.city = '',
     required this.injuries,
     this.mediaFiles = const [],
     this.createdAt,
     this.status = ReportStatus.draft,
+    this.reviewReason,
   });
 
   /// Convert to JSON for API submission
@@ -38,10 +42,12 @@ class TrafficReport {
       'roadUsage': roadUsage,
       'eventType': eventType,
       'state': state,
+      'city': city,
       'injuries': injuries,
       'mediaFiles': mediaFiles.map((f) => f.toJson()).toList(),
       'createdAt': createdAt?.toIso8601String(),
-      'status': status.name,
+      'status': status.toJsonValue(),
+      if (reviewReason != null) 'reviewReason': reviewReason,
     };
   }
 
@@ -55,6 +61,7 @@ class TrafficReport {
       roadUsage: json['roadUsage'] as String,
       eventType: json['eventType'] as String,
       state: json['state'] as String,
+      city: json['city'] as String? ?? '',
       injuries: json['injuries'] as String,
       mediaFiles: (json['mediaFiles'] as List<dynamic>?)
               ?.map((f) => MediaFile.fromJson(f as Map<String, dynamic>))
@@ -63,10 +70,8 @@ class TrafficReport {
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : null,
-      status: ReportStatus.values.firstWhere(
-        (s) => s.name == json['status'],
-        orElse: () => ReportStatus.draft,
-      ),
+      status: ReportStatusExtension.fromJsonValue(json['status'] as String?),
+      reviewReason: json['reviewReason'] as String?,
     );
   }
 
@@ -79,10 +84,12 @@ class TrafficReport {
     String? roadUsage,
     String? eventType,
     String? state,
+    String? city,
     String? injuries,
     List<MediaFile>? mediaFiles,
     DateTime? createdAt,
     ReportStatus? status,
+    String? reviewReason,
   }) {
     return TrafficReport(
       id: id ?? this.id,
@@ -92,10 +99,12 @@ class TrafficReport {
       roadUsage: roadUsage ?? this.roadUsage,
       eventType: eventType ?? this.eventType,
       state: state ?? this.state,
+      city: city ?? this.city,
       injuries: injuries ?? this.injuries,
       mediaFiles: mediaFiles ?? this.mediaFiles,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
+      reviewReason: reviewReason ?? this.reviewReason,
     );
   }
 
@@ -193,11 +202,12 @@ enum MediaType {
 
 /// Report submission status
 enum ReportStatus {
-  draft,
-  submitting,
-  submitted,
-  failed,
-  reviewed,
+  draft,           // Local only
+  submitting,      // In progress
+  submitted,       // Awaiting review
+  failed,          // Submission failed
+  reviewedPass,    // Admin approved
+  reviewedFail,    // Admin rejected
 }
 
 extension ReportStatusExtension on ReportStatus {
@@ -208,11 +218,13 @@ extension ReportStatusExtension on ReportStatus {
       case ReportStatus.submitting:
         return 'Submitting...';
       case ReportStatus.submitted:
-        return 'Submitted';
+        return 'Pending Review';
       case ReportStatus.failed:
         return 'Failed';
-      case ReportStatus.reviewed:
-        return 'Reviewed';
+      case ReportStatus.reviewedPass:
+        return 'Approved';
+      case ReportStatus.reviewedFail:
+        return 'Rejected';
     }
   }
 
@@ -223,11 +235,49 @@ extension ReportStatusExtension on ReportStatus {
       case ReportStatus.submitting:
         return 'sync';
       case ReportStatus.submitted:
-        return 'check_circle';
+        return 'hourglass_empty';
       case ReportStatus.failed:
         return 'error';
-      case ReportStatus.reviewed:
+      case ReportStatus.reviewedPass:
         return 'verified';
+      case ReportStatus.reviewedFail:
+        return 'cancel';
+    }
+  }
+
+  /// Convert to backend JSON value
+  String toJsonValue() {
+    switch (this) {
+      case ReportStatus.draft:
+        return 'draft';
+      case ReportStatus.submitting:
+        return 'submitting';
+      case ReportStatus.submitted:
+        return 'submitted';
+      case ReportStatus.failed:
+        return 'failed';
+      case ReportStatus.reviewedPass:
+        return 'reviewed_pass';
+      case ReportStatus.reviewedFail:
+        return 'reviewed_fail';
+    }
+  }
+
+  /// Parse from backend JSON value
+  static ReportStatus fromJsonValue(String? value) {
+    switch (value) {
+      case 'submitted':
+        return ReportStatus.submitted;
+      case 'reviewed_pass':
+        return ReportStatus.reviewedPass;
+      case 'reviewed_fail':
+        return ReportStatus.reviewedFail;
+      case 'submitting':
+        return ReportStatus.submitting;
+      case 'failed':
+        return ReportStatus.failed;
+      default:
+        return ReportStatus.draft;
     }
   }
 }

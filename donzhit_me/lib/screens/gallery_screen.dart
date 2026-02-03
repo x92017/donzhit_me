@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import '../models/sample_videos.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../constants/dropdown_options.dart';
@@ -19,27 +18,37 @@ class GalleryScreen extends StatefulWidget {
   State<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _GalleryScreenState extends State<GalleryScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _GalleryScreenState extends State<GalleryScreen> {
   String _selectedCategory = 'All';
   String? _selectedState;
   final ApiService _apiService = ApiService();
   bool _isSigningIn = false;
 
+  // Event type categories for filtering
+  static const List<String> _categories = [
+    'All',
+    'Pedestrian Intersection',
+    'Red Light',
+    'Speeding',
+    'On Phone',
+    'Reckless',
+  ];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _apiService.initialize();
     // Listen for auth state changes to update UI when auto sign-in completes
     _apiService.addAuthStateListener(_onAuthStateChanged);
+    // Fetch approved reports on init
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ReportProvider>().fetchApprovedReports();
+    });
   }
 
   @override
   void dispose() {
     _apiService.removeAuthStateListener(_onAuthStateChanged);
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -111,89 +120,66 @@ class _GalleryScreenState extends State<GalleryScreen>
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('=== GalleryScreen build called ===');
     return Scaffold(
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverToBoxAdapter(
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+      body: Consumer<ReportProvider>(
+        builder: (context, provider, child) {
+          return RefreshIndicator(
+            onRefresh: () => provider.fetchApprovedReports(),
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const DonzHitLogoHorizontal(height: 56),
-                          const Spacer(),
-                          _buildAuthButton(),
+                          Row(
+                            children: [
+                              const DonzHitLogoHorizontal(height: 56),
+                              const Spacer(),
+                              _buildAuthButton(),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Report pedestrian/traffic violations',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                          ),
+                          if (_apiService.isSignedIn) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Signed in as ${_apiService.userEmail}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                  ),
+                            ),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Report pedestrian/traffic violations',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                      ),
-                      if (_apiService.isSignedIn) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Signed in as ${_apiService.userEmail}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.7),
-                              ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _SliverTabBarDelegate(
-                TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(icon: Icon(Icons.play_circle), text: 'Sample Videos'),
-                    Tab(icon: Icon(Icons.photo_library), text: 'My Media'),
-                  ],
+                SliverToBoxAdapter(
+                  child: _buildStateFilter(),
                 ),
-              ),
+                SliverToBoxAdapter(
+                  child: _buildCategoryFilter(),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildApprovedReportsGrid(provider),
+                ),
+              ],
             ),
-          ];
+          );
         },
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildSampleVideosTab(),
-            _buildMyMediaTab(),
-          ],
-        ),
       ),
-    );
-  }
-
-  Widget _buildSampleVideosTab() {
-    return Column(
-      children: [
-        // State/Province dropdown
-        _buildStateFilter(),
-
-        // Category filter
-        _buildCategoryFilter(),
-
-        // Videos grid
-        Expanded(
-          child: _buildVideosGrid(),
-        ),
-      ],
     );
   }
 
@@ -258,9 +244,9 @@ class _GalleryScreenState extends State<GalleryScreen>
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: SampleVideos.categories.length,
+        itemCount: _categories.length,
         itemBuilder: (context, index) {
-          final category = SampleVideos.categories[index];
+          final category = _categories[index];
           final isSelected = category == _selectedCategory;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -279,46 +265,64 @@ class _GalleryScreenState extends State<GalleryScreen>
     );
   }
 
-  Widget _buildVideosGrid() {
-    var videos = SampleVideos.getByCategory(_selectedCategory);
+  Widget _buildApprovedReportsGrid(ReportProvider provider) {
+    if (provider.isLoading && provider.approvedReports.isEmpty) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    var reports = provider.approvedReports;
 
     // Filter by state if selected
     if (_selectedState != null) {
-      videos = videos.where((v) => v.location == _selectedState).toList();
+      reports = reports.where((r) => r.state == _selectedState).toList();
     }
 
-    if (videos.isEmpty) {
+    // Filter by category (event type)
+    if (_selectedCategory != 'All') {
+      reports = reports.where((r) => r.eventType == _selectedCategory).toList();
+    }
+
+    if (reports.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.video_library_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              _selectedState != null
-                  ? 'No videos for $_selectedState'
-                  : 'No videos in this category',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            if (_selectedState != null || _selectedCategory != 'All') ...[
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.video_library_outlined, size: 64, color: Colors.grey[400]),
               const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _selectedState = null;
-                    _selectedCategory = 'All';
-                  });
-                },
-                icon: const Icon(Icons.clear_all),
-                label: const Text('Clear Filters'),
+              Text(
+                _selectedState != null || _selectedCategory != 'All'
+                    ? 'No approved reports match your filters'
+                    : 'No approved reports yet',
+                style: TextStyle(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
               ),
+              if (_selectedState != null || _selectedCategory != 'All') ...[
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _selectedState = null;
+                      _selectedCategory = 'All';
+                    });
+                  },
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Clear Filters'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       );
     }
 
     return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -326,219 +330,109 @@ class _GalleryScreenState extends State<GalleryScreen>
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
-      itemCount: videos.length,
+      itemCount: reports.length,
       itemBuilder: (context, index) {
-        return _VideoCard(
-          video: videos[index],
-          onTap: () => _openVideoPlayer(videos[index]),
+        return _ApprovedReportCard(
+          report: reports[index],
+          onTap: () => _openReportMedia(reports[index]),
         );
       },
     );
   }
 
-  Widget _buildMyMediaTab() {
-    return Consumer<ReportProvider>(
-      builder: (context, provider, child) {
-        final allMedia = _getAllMediaFromReports(provider.reports);
-
-        if (allMedia.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.photo_library_outlined,
-                    size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No media uploaded yet',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Upload photos or videos with your reports',
-                  style: TextStyle(color: Colors.grey[500]),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Navigate to report form
-                    DefaultTabController.of(context).animateTo(1);
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create Report'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 1,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: allMedia.length,
-          itemBuilder: (context, index) {
-            final media = allMedia[index];
-            return _MediaThumbnail(
-              media: media,
-              onTap: () => _openMedia(media, allMedia, index),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  List<MediaFile> _getAllMediaFromReports(List<TrafficReport> reports) {
-    final List<MediaFile> allMedia = [];
-    for (final report in reports) {
-      allMedia.addAll(report.mediaFiles);
+  void _openReportMedia(TrafficReport report) {
+    if (report.mediaFiles.isEmpty) {
+      // Show report details if no media
+      _showReportDetails(report);
+      return;
     }
-    return allMedia;
-  }
 
-  void _openVideoPlayer(SampleVideo video) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoPlayerScreen(sampleVideo: video),
-      ),
-    );
-  }
-
-  void _openMedia(MediaFile media, List<MediaFile> allMedia, int index) {
-    if (media.isVideo) {
+    final firstMedia = report.mediaFiles.first;
+    if (firstMedia.isVideo) {
+      // Check if YouTube video
+      final youtubeId = _extractYouTubeId(firstMedia.url);
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => VideoPlayerScreen(
-            videoPath: media.path,
-            title: media.name,
+            videoPath: youtubeId == null && firstMedia.path.isNotEmpty ? firstMedia.path : null,
+            videoUrl: youtubeId == null && firstMedia.path.isEmpty ? firstMedia.url : null,
+            youtubeVideoId: youtubeId,
+            title: report.title,
           ),
         ),
       );
     } else {
-      final imagePaths = allMedia
+      final imageUrls = report.mediaFiles
           .where((m) => m.isImage)
-          .map((m) => m.path)
+          .map((m) => m.url ?? '')
+          .where((url) => url.isNotEmpty)
           .toList();
-      final imageIndex = imagePaths.indexOf(media.path);
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ImageViewerScreen(
-            allImages: imagePaths,
-            initialIndex: imageIndex >= 0 ? imageIndex : 0,
-            title: media.name,
+      if (imageUrls.isNotEmpty) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ImageViewerScreen(
+              allImages: imageUrls,
+              initialIndex: 0,
+              title: report.title,
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        _showReportDetails(report);
+      }
     }
   }
-}
 
-class _VideoCard extends StatelessWidget {
-  final SampleVideo video;
-  final VoidCallback onTap;
-
-  const _VideoCard({
-    required this.video,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
+  void _showReportDetails(TrafficReport report) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Thumbnail
-            Expanded(
-              flex: 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CachedNetworkImage(
-                    imageUrl: video.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey[300],
-                      child: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.error),
-                    ),
-                  ),
-                  // Play button overlay
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
-                  ),
-                  // Category badge
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getCategoryColor(video.category),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        video.category,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+            Text(
+              report.title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            // Title
-            Expanded(
-              flex: 1,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(
-                  video.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getEventTypeColor(report.eventType),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    report.eventType,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(report.state, style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              report.description,
+              style: TextStyle(color: Colors.grey[700]),
             ),
           ],
         ),
@@ -546,8 +440,8 @@ class _VideoCard extends StatelessWidget {
     );
   }
 
-  Color _getCategoryColor(String category) {
-    switch (category) {
+  Color _getEventTypeColor(String eventType) {
+    switch (eventType) {
       case 'Red Light':
         return Colors.red;
       case 'Speeding':
@@ -562,99 +456,235 @@ class _VideoCard extends StatelessWidget {
         return Colors.grey;
     }
   }
+
+  String? _extractYouTubeId(String? url) {
+    if (url == null) return null;
+
+    final watchMatch = RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (watchMatch != null) return watchMatch.group(1);
+
+    final shortMatch = RegExp(r'youtu\.be/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (shortMatch != null) return shortMatch.group(1);
+
+    final embedMatch = RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (embedMatch != null) return embedMatch.group(1);
+
+    return null;
+  }
 }
 
-class _MediaThumbnail extends StatelessWidget {
-  final MediaFile media;
+class _ApprovedReportCard extends StatelessWidget {
+  final TrafficReport report;
   final VoidCallback onTap;
 
-  const _MediaThumbnail({
-    required this.media,
+  const _ApprovedReportCard({
+    required this.report,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (media.url != null && media.url!.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: media.url!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey[300],
+    final hasMedia = report.mediaFiles.isNotEmpty;
+    final hasVideo = report.mediaFiles.any((m) => m.isVideo);
+    final firstMedia = hasMedia ? report.mediaFiles.first : null;
+    final thumbnailUrl = _getThumbnailUrl(firstMedia);
+    debugPrint('ReportCard: ${report.title}, hasMedia=$hasMedia, hasVideo=$hasVideo, thumbnailUrl=$thumbnailUrl');
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Thumbnail
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(
+                    child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                        ? Image.network(
+                            thumbnailUrl,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) {
+                                debugPrint('Image.network: loaded successfully');
+                                return child;
+                              }
+                              debugPrint('Image.network: loading ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
+                              return Container(
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              debugPrint('Image.network ERROR: $error');
+                              return _buildPlaceholder(hasVideo);
+                            },
+                          )
+                        : _buildPlaceholder(hasVideo),
                   ),
-                  errorWidget: (context, url, error) => _buildPlaceholder(),
-                )
-              else
-                _buildPlaceholder(),
-              if (media.isVideo)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
+                  // Play button overlay for videos
+                  if (hasVideo)
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 20,
+                  // Event type badge
+                  Positioned(
+                    top: 4,
+                    left: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getEventTypeColor(report.eventType).withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        report.eventType,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
+                ],
+              ),
+            ),
+            // Title and location
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    report.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, size: 10, color: Colors.grey[500]),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          report.state,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildPlaceholder() {
+  Widget _buildPlaceholder(bool isVideo) {
     return Container(
-      color: Colors.grey[300],
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isVideo
+              ? [Colors.indigo.shade200, Colors.indigo.shade400]
+              : [Colors.grey.shade200, Colors.grey.shade400],
+        ),
+      ),
       child: Center(
         child: Icon(
-          media.isVideo ? Icons.videocam : Icons.image,
-          color: Colors.grey[600],
-          size: 32,
+          isVideo ? Icons.videocam : Icons.image,
+          color: Colors.white.withValues(alpha: 0.8),
+          size: 48,
         ),
       ),
     );
   }
-}
 
-class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-
-  _SliverTabBarDelegate(this.tabBar);
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: tabBar,
-    );
+  Color _getEventTypeColor(String eventType) {
+    switch (eventType) {
+      case 'Red Light':
+        return Colors.red;
+      case 'Speeding':
+        return Colors.orange;
+      case 'On Phone':
+        return Colors.purple;
+      case 'Reckless':
+        return Colors.deepOrange;
+      case 'Pedestrian Intersection':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
   }
 
-  @override
-  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
-    return tabBar != oldDelegate.tabBar;
+  /// Get thumbnail URL for media - extracts YouTube thumbnail or returns image URL
+  String? _getThumbnailUrl(MediaFile? media) {
+    if (media == null || media.url == null) {
+      debugPrint('_getThumbnailUrl: media=${media != null}, url=${media?.url}');
+      return null;
+    }
+
+    final url = media.url!;
+    debugPrint('_getThumbnailUrl: url=$url');
+
+    // For images, use the URL directly
+    if (media.isImage) {
+      return url;
+    }
+
+    // For YouTube videos, extract video ID and construct thumbnail URL
+    final youtubeId = _extractYouTubeId(url);
+    if (youtubeId != null) {
+      return 'https://img.youtube.com/vi/$youtubeId/hqdefault.jpg';
+    }
+
+    // For GCS/non-YouTube videos, no thumbnail available
+    return null;
+  }
+
+  String? _extractYouTubeId(String url) {
+    final watchMatch = RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (watchMatch != null) return watchMatch.group(1);
+
+    final shortMatch = RegExp(r'youtu\.be/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (shortMatch != null) return shortMatch.group(1);
+
+    final embedMatch = RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (embedMatch != null) return embedMatch.group(1);
+
+    return null;
   }
 }

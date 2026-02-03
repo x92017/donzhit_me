@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -407,6 +406,45 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Rejection Reason (for rejected reports)
+              if (report.status == ReportStatus.reviewedFail &&
+                  report.reviewReason != null &&
+                  report.reviewReason!.isNotEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: Colors.red[700]),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Rejection Reason',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.red[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        report.reviewReason!,
+                        style: TextStyle(color: Colors.red[900]),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // Media Files
               if (report.mediaFiles.isNotEmpty) ...[
                 const Text(
@@ -526,15 +564,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Color _getStatusColor(ReportStatus status) {
     switch (status) {
       case ReportStatus.draft:
-        return Colors.orange;
+        return Colors.grey;
       case ReportStatus.submitting:
         return Colors.blue;
       case ReportStatus.submitted:
-        return Colors.green;
+        return Colors.orange;  // Pending review
       case ReportStatus.failed:
         return Colors.red;
-      case ReportStatus.reviewed:
-        return Colors.purple;
+      case ReportStatus.reviewedPass:
+        return Colors.green;   // Approved
+      case ReportStatus.reviewedFail:
+        return Colors.red[800]!;  // Rejected (dark red)
     }
   }
 
@@ -709,15 +749,17 @@ class _ReportListItem extends StatelessWidget {
   Color _getStatusColor(ReportStatus status) {
     switch (status) {
       case ReportStatus.draft:
-        return Colors.orange;
+        return Colors.grey;
       case ReportStatus.submitting:
         return Colors.blue;
       case ReportStatus.submitted:
-        return Colors.green;
+        return Colors.orange;  // Pending review
       case ReportStatus.failed:
         return Colors.red;
-      case ReportStatus.reviewed:
-        return Colors.purple;
+      case ReportStatus.reviewedPass:
+        return Colors.green;   // Approved
+      case ReportStatus.reviewedFail:
+        return Colors.red[800]!;  // Rejected (dark red)
     }
   }
 
@@ -728,11 +770,13 @@ class _ReportListItem extends StatelessWidget {
       case ReportStatus.submitting:
         return Icons.sync;
       case ReportStatus.submitted:
-        return Icons.check_circle;
+        return Icons.hourglass_empty;  // Pending review
       case ReportStatus.failed:
         return Icons.error;
-      case ReportStatus.reviewed:
-        return Icons.verified;
+      case ReportStatus.reviewedPass:
+        return Icons.verified;  // Approved
+      case ReportStatus.reviewedFail:
+        return Icons.cancel;  // Rejected
     }
   }
 }

@@ -6,6 +6,10 @@
         android:label="DonzHit.me"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Google Places API Key for city autocomplete -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDlBmY577eFgW_PNljTPKtTw72xZYcp7OQ"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

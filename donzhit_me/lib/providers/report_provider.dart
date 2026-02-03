@@ -12,24 +12,41 @@ class ReportProvider with ChangeNotifier {
   final Uuid _uuid = const Uuid();
 
   List<TrafficReport> _reports = [];
+  List<TrafficReport> _approvedReports = [];  // Public feed
+  List<TrafficReport> _allReportsAdmin = [];  // Admin dashboard
+  List<TrafficReport> _reviewQueue = [];      // Admin review queue
   TrafficReport? _currentDraft;
   bool _isLoading = false;
   String? _error;
 
   // Getters
   List<TrafficReport> get reports => _reports;
+  List<TrafficReport> get approvedReports => _approvedReports;
+  List<TrafficReport> get allReportsAdmin => _allReportsAdmin;
+  List<TrafficReport> get reviewQueue => _reviewQueue;
   TrafficReport? get currentDraft => _currentDraft;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  // Statistics
+  // User's own report statistics
   int get totalReports => _reports.length;
-  int get submittedReports =>
+  int get pendingReviewReports =>
       _reports.where((r) => r.status == ReportStatus.submitted).length;
   int get draftReports =>
       _reports.where((r) => r.status == ReportStatus.draft).length;
-  int get reviewedReports =>
-      _reports.where((r) => r.status == ReportStatus.reviewed).length;
+  int get approvedReportsCount =>
+      _reports.where((r) => r.status == ReportStatus.reviewedPass).length;
+  int get rejectedReportsCount =>
+      _reports.where((r) => r.status == ReportStatus.reviewedFail).length;
+
+  // System-wide statistics (from admin data)
+  int get totalReportsAdmin => _allReportsAdmin.length;
+  int get pendingReviewReportsAdmin =>
+      _allReportsAdmin.where((r) => r.status == ReportStatus.submitted).length;
+  int get approvedReportsAdmin =>
+      _allReportsAdmin.where((r) => r.status == ReportStatus.reviewedPass).length;
+  int get rejectedReportsAdmin =>
+      _allReportsAdmin.where((r) => r.status == ReportStatus.reviewedFail).length;
 
   /// Initialize the provider
   Future<void> init() async {
@@ -233,6 +250,104 @@ class ReportProvider with ChangeNotifier {
           r.eventType.toLowerCase().contains(lowerQuery) ||
           r.state.toLowerCase().contains(lowerQuery);
     }).toList();
+  }
+
+  // ============================================================================
+  // Public Feed Methods
+  // ============================================================================
+
+  /// Fetch approved reports for public feed (no auth required)
+  Future<void> fetchApprovedReports() async {
+    _setLoading(true);
+    _clearError();
+
+    final response = await _apiService.getApprovedReports();
+
+    if (response.isSuccess && response.data != null) {
+      _approvedReports = response.data!;
+      notifyListeners();
+    } else {
+      _setError(response.error ?? 'Failed to fetch approved reports');
+    }
+
+    _setLoading(false);
+  }
+
+  // ============================================================================
+  // Admin Methods
+  // ============================================================================
+
+  /// Fetch all reports for admin dashboard (requires admin role)
+  Future<void> fetchAllReportsAdmin() async {
+    _setLoading(true);
+    _clearError();
+
+    final response = await _apiService.getAllReportsAdmin();
+
+    if (response.isSuccess && response.data != null) {
+      _allReportsAdmin = response.data!;
+      notifyListeners();
+    } else {
+      _setError(response.error ?? 'Failed to fetch admin reports');
+    }
+
+    _setLoading(false);
+  }
+
+  /// Fetch reports awaiting review (requires admin role)
+  Future<void> fetchReviewQueue() async {
+    _setLoading(true);
+    _clearError();
+
+    final response = await _apiService.getReportsForReview();
+
+    if (response.isSuccess && response.data != null) {
+      _reviewQueue = response.data!;
+      notifyListeners();
+    } else {
+      _setError(response.error ?? 'Failed to fetch review queue');
+    }
+
+    _setLoading(false);
+  }
+
+  /// Approve or reject a report (requires admin role)
+  Future<bool> reviewReport(String reportId, {required bool approve, String? reason}) async {
+    _setLoading(true);
+    _clearError();
+
+    final response = await _apiService.reviewReport(
+      reportId,
+      approve: approve,
+      reason: reason,
+    );
+
+    if (response.isSuccess) {
+      // Remove from review queue
+      _reviewQueue.removeWhere((r) => r.id == reportId);
+
+      // Update in admin list
+      final adminIndex = _allReportsAdmin.indexWhere((r) => r.id == reportId);
+      if (adminIndex >= 0) {
+        _allReportsAdmin[adminIndex] = _allReportsAdmin[adminIndex].copyWith(
+          status: approve ? ReportStatus.reviewedPass : ReportStatus.reviewedFail,
+          reviewReason: reason,
+        );
+      }
+
+      // If approved, add to approved reports
+      if (approve && adminIndex >= 0) {
+        _approvedReports.insert(0, _allReportsAdmin[adminIndex]);
+      }
+
+      notifyListeners();
+      _setLoading(false);
+      return true;
+    } else {
+      _setError(response.error ?? 'Failed to review report');
+      _setLoading(false);
+      return false;
+    }
   }
 
   // Private helper methods

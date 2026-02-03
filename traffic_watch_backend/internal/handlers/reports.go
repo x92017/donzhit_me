@@ -73,9 +73,10 @@ func (h *ReportsHandler) createReportJSON(c *gin.Context, user *models.UserInfo)
 		RoadUsage:   req.RoadUsage,
 		EventType:   req.EventType,
 		State:       req.State,
+		City:        req.City,
 		Injuries:    req.Injuries,
 		MediaFiles:  []models.MediaFile{},
-		Status:      models.StatusActive,
+		Status:      models.StatusSubmitted,
 	}
 
 	if err := h.storage.CreateReport(c.Request.Context(), report); err != nil {
@@ -98,6 +99,7 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	roadUsage := c.PostForm("roadUsage")
 	eventType := c.PostForm("eventType")
 	state := c.PostForm("state")
+	city := c.PostForm("city")
 	injuries := c.PostForm("injuries")
 
 	log.Printf("Multipart form received - title: %s, roadUsage: %s, eventType: %s, state: %s, dateTime: %s",
@@ -252,9 +254,10 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 		RoadUsage:   roadUsage,
 		EventType:   eventType,
 		State:       state,
+		City:        city,
 		Injuries:    injuries,
 		MediaFiles:  mediaFiles,
-		Status:      models.StatusActive,
+		Status:      models.StatusSubmitted,
 	}
 
 	log.Printf("Creating report %s in storage for user %s", reportID, user.Email)
@@ -445,5 +448,181 @@ func (h *ReportsHandler) DeleteReport(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "report deleted successfully",
+	})
+}
+
+// ============================================================================
+// Public Endpoints (no auth required)
+// ============================================================================
+
+// ListApprovedReports handles GET /v1/public/reports
+// Returns all approved reports for the public feed (no auth required)
+func (h *ReportsHandler) ListApprovedReports(c *gin.Context) {
+	reports, err := h.storage.ListApprovedReports(c.Request.Context())
+	if err != nil {
+		log.Printf("Failed to list approved reports: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "fetch_failed",
+			"message": "failed to fetch reports",
+		})
+		return
+	}
+
+	// Refresh signed URLs for GCS media files (skip YouTube URLs)
+	for i := range reports {
+		for j := range reports[i].MediaFiles {
+			if isYouTubeURL(reports[i].MediaFiles[j].URL) {
+				continue
+			}
+			objectPath := fmt.Sprintf("users/%s/reports/%s/%s",
+				reports[i].UserID,
+				reports[i].ID,
+				reports[i].MediaFiles[j].ID,
+			)
+			signedURL, err := h.gcs.GetSignedURL(c.Request.Context(), objectPath, 0)
+			if err == nil {
+				reports[i].MediaFiles[j].URL = signedURL
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, models.ListReportsResponse{
+		Reports: reports,
+		Count:   len(reports),
+	})
+}
+
+// ============================================================================
+// Admin Endpoints
+// ============================================================================
+
+// ListAllReportsAdmin handles GET /v1/admin/reports
+// Returns all non-deleted reports for admin dashboard
+func (h *ReportsHandler) ListAllReportsAdmin(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	reports, err := h.storage.ListAllReports(c.Request.Context())
+	if err != nil {
+		log.Printf("Failed to list all reports (admin): %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "fetch_failed",
+			"message": "failed to fetch reports",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.ListReportsResponse{
+		Reports: reports,
+		Count:   len(reports),
+	})
+}
+
+// ListReportsForReview handles GET /v1/admin/reports/review
+// Returns reports awaiting admin review (status = "submitted")
+func (h *ReportsHandler) ListReportsForReview(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	reports, err := h.storage.ListReportsAwaitingReview(c.Request.Context())
+	if err != nil {
+		log.Printf("Failed to list reports for review: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "fetch_failed",
+			"message": "failed to fetch reports",
+		})
+		return
+	}
+
+	// Refresh signed URLs for GCS media files
+	for i := range reports {
+		for j := range reports[i].MediaFiles {
+			if isYouTubeURL(reports[i].MediaFiles[j].URL) {
+				continue
+			}
+			objectPath := fmt.Sprintf("users/%s/reports/%s/%s",
+				reports[i].UserID,
+				reports[i].ID,
+				reports[i].MediaFiles[j].ID,
+			)
+			signedURL, err := h.gcs.GetSignedURL(c.Request.Context(), objectPath, 0)
+			if err == nil {
+				reports[i].MediaFiles[j].URL = signedURL
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, models.ListReportsResponse{
+		Reports: reports,
+		Count:   len(reports),
+	})
+}
+
+// ReviewReportRequest represents the request body for reviewing a report
+type ReviewReportRequest struct {
+	Status string `json:"status" binding:"required,oneof=reviewed_pass reviewed_fail"`
+	Reason string `json:"reason"`
+}
+
+// ReviewReport handles POST /v1/admin/reports/:id/review
+// Approves or rejects a report
+func (h *ReportsHandler) ReviewReport(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	reportID := c.Param("id")
+	if !validation.ValidateUUID(reportID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid report ID format",
+		})
+		return
+	}
+
+	var req ReviewReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Validate that rejected reports have a reason
+	if req.Status == models.StatusReviewedFail && req.Reason == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "reason is required when rejecting a report",
+		})
+		return
+	}
+
+	if err := h.storage.UpdateReportStatus(c.Request.Context(), reportID, req.Status, req.Reason); err != nil {
+		if err.Error() == "report not found" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "not_found",
+				"message": "report not found",
+			})
+			return
+		}
+		log.Printf("Failed to update report status: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "update_failed",
+			"message": "failed to update report status",
+		})
+		return
+	}
+
+	log.Printf("Report %s reviewed by %s: status=%s", reportID, user.Email, req.Status)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "report reviewed successfully",
+		"status":  req.Status,
 	})
 }

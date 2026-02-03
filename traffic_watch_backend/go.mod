@@ -8,6 +8,7 @@ require (
 	cloud.google.com/go/storage v1.40.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.19.0
+	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.0
 	golang.org/x/oauth2 v0.18.0

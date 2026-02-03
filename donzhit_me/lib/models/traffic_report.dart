@@ -6,8 +6,8 @@ class TrafficReport {
   final String title;
   final String description;
   final DateTime dateTime;
-  final String roadUsage;
-  final String eventType;
+  final List<String> roadUsages;
+  final List<String> eventTypes;
   final String state;
   final String city;
   final String injuries;
@@ -15,14 +15,15 @@ class TrafficReport {
   final DateTime? createdAt;
   final ReportStatus status;
   final String? reviewReason;
+  final int? priority; // 1-5, where 1 is highest priority (only for approved reports)
 
   TrafficReport({
     this.id,
     required this.title,
     required this.description,
     required this.dateTime,
-    required this.roadUsage,
-    required this.eventType,
+    this.roadUsages = const [],
+    this.eventTypes = const [],
     required this.state,
     this.city = '',
     required this.injuries,
@@ -30,6 +31,7 @@ class TrafficReport {
     this.createdAt,
     this.status = ReportStatus.draft,
     this.reviewReason,
+    this.priority,
   });
 
   /// Convert to JSON for API submission
@@ -39,8 +41,8 @@ class TrafficReport {
       'title': title,
       'description': description,
       'dateTime': dateTime.toIso8601String(),
-      'roadUsage': roadUsage,
-      'eventType': eventType,
+      'roadUsages': roadUsages,
+      'eventTypes': eventTypes,
       'state': state,
       'city': city,
       'injuries': injuries,
@@ -48,6 +50,7 @@ class TrafficReport {
       'createdAt': createdAt?.toIso8601String(),
       'status': status.toJsonValue(),
       if (reviewReason != null) 'reviewReason': reviewReason,
+      if (priority != null) 'priority': priority,
     };
   }
 
@@ -58,8 +61,14 @@ class TrafficReport {
       title: json['title'] as String,
       description: json['description'] as String,
       dateTime: DateTime.parse(json['dateTime'] as String),
-      roadUsage: json['roadUsage'] as String,
-      eventType: json['eventType'] as String,
+      roadUsages: (json['roadUsages'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      eventTypes: (json['eventTypes'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
       state: json['state'] as String,
       city: json['city'] as String? ?? '',
       injuries: json['injuries'] as String,
@@ -72,6 +81,7 @@ class TrafficReport {
           : null,
       status: ReportStatusExtension.fromJsonValue(json['status'] as String?),
       reviewReason: json['reviewReason'] as String?,
+      priority: json['priority'] as int?,
     );
   }
 
@@ -81,8 +91,8 @@ class TrafficReport {
     String? title,
     String? description,
     DateTime? dateTime,
-    String? roadUsage,
-    String? eventType,
+    List<String>? roadUsages,
+    List<String>? eventTypes,
     String? state,
     String? city,
     String? injuries,
@@ -90,14 +100,15 @@ class TrafficReport {
     DateTime? createdAt,
     ReportStatus? status,
     String? reviewReason,
+    int? priority,
   }) {
     return TrafficReport(
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
       dateTime: dateTime ?? this.dateTime,
-      roadUsage: roadUsage ?? this.roadUsage,
-      eventType: eventType ?? this.eventType,
+      roadUsages: roadUsages ?? this.roadUsages,
+      eventTypes: eventTypes ?? this.eventTypes,
       state: state ?? this.state,
       city: city ?? this.city,
       injuries: injuries ?? this.injuries,
@@ -105,6 +116,7 @@ class TrafficReport {
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       reviewReason: reviewReason ?? this.reviewReason,
+      priority: priority ?? this.priority,
     );
   }
 
@@ -117,7 +129,7 @@ class TrafficReport {
 
   @override
   String toString() {
-    return 'TrafficReport(id: $id, title: $title, eventType: $eventType, status: $status)';
+    return 'TrafficReport(id: $id, title: $title, eventTypes: $eventTypes, status: $status)';
   }
 }
 

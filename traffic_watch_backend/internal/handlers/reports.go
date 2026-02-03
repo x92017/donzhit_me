@@ -70,8 +70,8 @@ func (h *ReportsHandler) createReportJSON(c *gin.Context, user *models.UserInfo)
 		Title:       req.Title,
 		Description: req.Description,
 		DateTime:    req.DateTime,
-		RoadUsage:   req.RoadUsage,
-		EventType:   req.EventType,
+		RoadUsages:  req.RoadUsages,
+		EventTypes:  req.EventTypes,
 		State:       req.State,
 		City:        req.City,
 		Injuries:    req.Injuries,
@@ -96,14 +96,39 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	title := c.PostForm("title")
 	description := c.PostForm("description")
 	dateTimeStr := c.PostForm("dateTime")
-	roadUsage := c.PostForm("roadUsage")
-	eventType := c.PostForm("eventType")
 	state := c.PostForm("state")
 	city := c.PostForm("city")
 	injuries := c.PostForm("injuries")
 
-	log.Printf("Multipart form received - title: %s, roadUsage: %s, eventType: %s, state: %s, dateTime: %s",
-		title, roadUsage, eventType, state, dateTimeStr)
+	// Parse array fields - support both comma-separated and multiple form values
+	roadUsagesStr := c.PostForm("roadUsages")
+	eventTypesStr := c.PostForm("eventTypes")
+
+	var roadUsages []string
+	var eventTypes []string
+
+	// Parse roadUsages - try comma-separated first, then multiple form values
+	if roadUsagesStr != "" {
+		roadUsages = strings.Split(roadUsagesStr, ",")
+		for i := range roadUsages {
+			roadUsages[i] = strings.TrimSpace(roadUsages[i])
+		}
+	} else {
+		roadUsages = c.PostFormArray("roadUsages[]")
+	}
+
+	// Parse eventTypes - try comma-separated first, then multiple form values
+	if eventTypesStr != "" {
+		eventTypes = strings.Split(eventTypesStr, ",")
+		for i := range eventTypes {
+			eventTypes[i] = strings.TrimSpace(eventTypes[i])
+		}
+	} else {
+		eventTypes = c.PostFormArray("eventTypes[]")
+	}
+
+	log.Printf("Multipart form received - title: %s, roadUsages: %v, eventTypes: %v, state: %s, dateTime: %s",
+		title, roadUsages, eventTypes, state, dateTimeStr)
 
 	// Parse datetime - try multiple formats
 	var dateTime time.Time
@@ -131,9 +156,9 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	}
 
 	// Validate required fields
-	if title == "" || description == "" || roadUsage == "" || eventType == "" || state == "" {
-		log.Printf("Missing required fields for user %s - title:%v desc:%v roadUsage:%v eventType:%v state:%v",
-			user.Email, title != "", description != "", roadUsage != "", eventType != "", state != "")
+	if title == "" || description == "" || len(roadUsages) == 0 || len(eventTypes) == 0 || state == "" {
+		log.Printf("Missing required fields for user %s - title:%v desc:%v roadUsages:%v eventTypes:%v state:%v",
+			user.Email, title != "", description != "", len(roadUsages) > 0, len(eventTypes) > 0, state != "")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "validation_error",
 			"message": "missing required fields",
@@ -251,8 +276,8 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 		Title:       title,
 		Description: description,
 		DateTime:    dateTime,
-		RoadUsage:   roadUsage,
-		EventType:   eventType,
+		RoadUsages:  roadUsages,
+		EventTypes:  eventTypes,
 		State:       state,
 		City:        city,
 		Injuries:    injuries,
@@ -564,8 +589,9 @@ func (h *ReportsHandler) ListReportsForReview(c *gin.Context) {
 
 // ReviewReportRequest represents the request body for reviewing a report
 type ReviewReportRequest struct {
-	Status string `json:"status" binding:"required,oneof=reviewed_pass reviewed_fail"`
-	Reason string `json:"reason"`
+	Status   string `json:"status" binding:"required,oneof=reviewed_pass reviewed_fail"`
+	Reason   string `json:"reason"`
+	Priority *int   `json:"priority"` // 1-5, only used when approving (1=highest priority)
 }
 
 // ReviewReport handles POST /v1/admin/reports/:id/review
@@ -603,7 +629,26 @@ func (h *ReportsHandler) ReviewReport(c *gin.Context) {
 		return
 	}
 
-	if err := h.storage.UpdateReportStatus(c.Request.Context(), reportID, req.Status, req.Reason); err != nil {
+	// Validate priority (1-5) if provided for approved reports
+	if req.Status == models.StatusReviewedPass && req.Priority != nil {
+		if *req.Priority < 1 || *req.Priority > 5 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "validation_error",
+				"message": "priority must be between 1 and 5",
+			})
+			return
+		}
+	}
+
+	// Use UpdateReportStatusWithPriority when approving with priority
+	var err error
+	if req.Status == models.StatusReviewedPass && req.Priority != nil {
+		err = h.storage.UpdateReportStatusWithPriority(c.Request.Context(), reportID, req.Status, req.Reason, req.Priority)
+	} else {
+		err = h.storage.UpdateReportStatus(c.Request.Context(), reportID, req.Status, req.Reason)
+	}
+
+	if err != nil {
 		if err.Error() == "report not found" {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "not_found",
@@ -619,10 +664,11 @@ func (h *ReportsHandler) ReviewReport(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Report %s reviewed by %s: status=%s", reportID, user.Email, req.Status)
+	log.Printf("Report %s reviewed by %s: status=%s, priority=%v", reportID, user.Email, req.Status, req.Priority)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "report reviewed successfully",
-		"status":  req.Status,
+		"message":  "report reviewed successfully",
+		"status":   req.Status,
+		"priority": req.Priority,
 	})
 }

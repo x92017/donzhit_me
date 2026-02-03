@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/report_provider.dart';
@@ -72,8 +73,14 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget build(BuildContext context) {
     final isAdmin = _apiService.isAdmin;
 
-    return Scaffold(
-      body: Consumer<ReportProvider>(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light, // Light icons for dark header
+        statusBarBrightness: Brightness.dark, // For iOS
+      ),
+      child: Scaffold(
+        body: Consumer<ReportProvider>(
         builder: (context, provider, child) {
           return RefreshIndicator(
             onRefresh: () async {
@@ -106,6 +113,7 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           );
         },
+      ),
       ),
     );
   }
@@ -338,78 +346,107 @@ class _AdminScreenState extends State<AdminScreen> {
 
   void _showReviewDialog(BuildContext context, TrafficReport report, {required bool approve}) {
     final reasonController = TextEditingController();
+    int selectedPriority = 3; // Default to medium priority
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(approve ? 'Approve Report' : 'Reject Report'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Report: ${report.title}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text('Event Type: ${report.eventType}'),
-            Text('State: ${report.state}'),
-            Text('Date: ${DateFormat('MMM d, yyyy').format(report.dateTime)}'),
-            if (!approve) ...[
-              const SizedBox(height: 16),
-              TextField(
-                controller: reasonController,
-                decoration: const InputDecoration(
-                  labelText: 'Rejection Reason (required)',
-                  hintText: 'Explain why this report is being rejected...',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(approve ? 'Approve Report' : 'Reject Report'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Report: ${report.title}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 8),
+              Text('Event Type: ${report.eventTypes.join(', ')}'),
+              Text('State: ${report.state}'),
+              Text('Date: ${DateFormat('MMM d, yyyy').format(report.dateTime)}'),
+              if (approve) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  value: selectedPriority,
+                  decoration: const InputDecoration(
+                    labelText: 'Priority',
+                    hintText: 'Select priority level',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 1, child: Text('1 - Highest Priority')),
+                    DropdownMenuItem(value: 2, child: Text('2 - High Priority')),
+                    DropdownMenuItem(value: 3, child: Text('3 - Medium Priority')),
+                    DropdownMenuItem(value: 4, child: Text('4 - Low Priority')),
+                    DropdownMenuItem(value: 5, child: Text('5 - Lowest Priority')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() {
+                        selectedPriority = value;
+                      });
+                    }
+                  },
+                ),
+              ],
+              if (!approve) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  decoration: const InputDecoration(
+                    labelText: 'Rejection Reason (required)',
+                    hintText: 'Explain why this report is being rejected...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (!approve && reasonController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please provide a rejection reason')),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+
+                final provider = context.read<ReportProvider>();
+                final success = await provider.reviewReport(
+                  report.id!,
+                  approve: approve,
+                  reason: approve ? null : reasonController.text.trim(),
+                  priority: approve ? selectedPriority : null,
+                );
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(success
+                          ? 'Report ${approve ? 'approved' : 'rejected'} successfully'
+                          : 'Failed to review report'),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: approve ? Colors.green : Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(approve ? 'Approve' : 'Reject'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!approve && reasonController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please provide a rejection reason')),
-                );
-                return;
-              }
-
-              Navigator.pop(context);
-
-              final provider = context.read<ReportProvider>();
-              final success = await provider.reviewReport(
-                report.id!,
-                approve: approve,
-                reason: approve ? null : reasonController.text.trim(),
-              );
-
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(success
-                        ? 'Report ${approve ? 'approved' : 'rejected'} successfully'
-                        : 'Failed to review report'),
-                    backgroundColor: success ? Colors.green : Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: approve ? Colors.green : Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: Text(approve ? 'Approve' : 'Reject'),
-          ),
-        ],
       ),
     );
   }
@@ -463,33 +500,44 @@ class _AdminScreenState extends State<AdminScreen> {
               const SizedBox(height: 16),
 
               // Event type and location
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Container(
+                  ...report.eventTypes.map((eventType) => Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getEventTypeColorForReview(report.eventType),
+                      color: _getEventTypeColorForReview(eventType),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      report.eventType,
+                      eventType,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                  )),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(report.state, style: TextStyle(color: Colors.grey[600])),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(report.state, style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(width: 12),
-                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('MMM d, yyyy').format(report.dateTime),
-                    style: TextStyle(color: Colors.grey[600]),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        DateFormat('MMM d, yyyy').format(report.dateTime),
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -951,7 +999,7 @@ class _ReportCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              report.eventType,
+              report.eventTypes.join(', '),
               style: TextStyle(color: Colors.grey[600]),
             ),
             Text(
@@ -1071,27 +1119,28 @@ class _ReviewQueueItem extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
                         children: [
-                          Container(
+                          ...report.eventTypes.map((eventType) => Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: _getEventTypeColor(report.eventType),
+                              color: _getEventTypeColor(eventType),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              report.eventType,
+                              eventType,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
+                          )),
                           Text(
                             report.state,
                             style: TextStyle(

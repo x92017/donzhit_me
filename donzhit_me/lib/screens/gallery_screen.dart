@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
@@ -120,8 +120,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Consumer<ReportProvider>(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light, // Light icons for dark header
+        statusBarBrightness: Brightness.dark, // For iOS
+      ),
+      child: Scaffold(
+        body: Consumer<ReportProvider>(
         builder: (context, provider, child) {
           return RefreshIndicator(
             onRefresh: () => provider.fetchApprovedReports(),
@@ -129,38 +135,30 @@ class _GalleryScreenState extends State<GalleryScreen> {
               slivers: [
                 SliverToBoxAdapter(
                   child: Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.only(left: 24, right: 24, bottom: 11, top: 2),
                     decoration: const BoxDecoration(
                       color: Colors.black,
                     ),
                     child: SafeArea(
                       bottom: false,
+                      minimum: const EdgeInsets.only(top: 2),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              const DonzHitLogoHorizontal(height: 56),
+                              const DonzHitLogoHorizontal(height: 62),
                               const Spacer(),
                               _buildAuthButton(),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 2),
                           Text(
                             'Report pedestrian/traffic violations',
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   color: Colors.white.withValues(alpha: 0.9),
                                 ),
                           ),
-                          if (_apiService.isSignedIn) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Signed in as ${_apiService.userEmail}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                  ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -179,6 +177,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             ),
           );
         },
+      ),
       ),
     );
   }
@@ -280,9 +279,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
       reports = reports.where((r) => r.state == _selectedState).toList();
     }
 
-    // Filter by category (event type)
+    // Filter by category (event type) - check if any event type matches
     if (_selectedCategory != 'All') {
-      reports = reports.where((r) => r.eventType == _selectedCategory).toList();
+      reports = reports.where((r) => r.eventTypes.contains(_selectedCategory)).toList();
     }
 
     if (reports.isEmpty) {
@@ -320,21 +319,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
       );
     }
 
-    return GridView.builder(
+    return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 16 / 12,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
       itemCount: reports.length,
       itemBuilder: (context, index) {
-        return _ApprovedReportCard(
-          report: reports[index],
-          onTap: () => _openReportMedia(reports[index]),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _ApprovedReportCard(
+            report: reports[index],
+            onTap: () => _openReportMedia(reports[index]),
+          ),
         );
       },
     );
@@ -406,27 +402,34 @@ class _GalleryScreenState extends State<GalleryScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Container(
+                ...report.eventTypes.map((eventType) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getEventTypeColor(report.eventType),
+                    color: _getEventTypeColor(eventType),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    report.eventType,
+                    eventType,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                )),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(report.state, style: TextStyle(color: Colors.grey[600])),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(report.state, style: TextStyle(color: Colors.grey[600])),
               ],
             ),
             const SizedBox(height: 16),
@@ -488,121 +491,141 @@ class _ApprovedReportCard extends StatelessWidget {
     final hasVideo = report.mediaFiles.any((m) => m.isVideo);
     final firstMedia = hasMedia ? report.mediaFiles.first : null;
     final thumbnailUrl = _getThumbnailUrl(firstMedia);
-    debugPrint('ReportCard: ${report.title}, hasMedia=$hasMedia, hasVideo=$hasVideo, thumbnailUrl=$thumbnailUrl');
 
     return Card(
       clipBehavior: Clip.antiAlias,
+      elevation: 2,
       child: InkWell(
         onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Thumbnail
-            Expanded(
+            // Thumbnail with 16:9 aspect ratio
+            AspectRatio(
+              aspectRatio: 16 / 9,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Positioned.fill(
-                    child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
-                        ? Image.network(
-                            thumbnailUrl,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) {
-                                debugPrint('Image.network: loaded successfully');
-                                return child;
-                              }
-                              debugPrint('Image.network: loading ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
-                              return Container(
-                                color: Colors.grey[300],
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              debugPrint('Image.network ERROR: $error');
-                              return _buildPlaceholder(hasVideo);
-                            },
-                          )
-                        : _buildPlaceholder(hasVideo),
-                  ),
+                  thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                      ? Image.network(
+                          thumbnailUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: Colors.grey[300],
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildPlaceholder(hasVideo);
+                          },
+                        )
+                      : _buildPlaceholder(hasVideo),
                   // Play button overlay for videos
                   if (hasVideo)
                     Center(
                       child: Container(
-                        padding: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
+                          color: Colors.black.withValues(alpha: 0.6),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.play_arrow,
                           color: Colors.white,
-                          size: 24,
+                          size: 40,
                         ),
                       ),
                     ),
-                  // Event type badge
-                  Positioned(
-                    top: 4,
-                    left: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getEventTypeColor(report.eventType).withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: Text(
-                        report.eventType,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  // Event type badges
+                  if (report.eventTypes.isNotEmpty)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: report.eventTypes.map((eventType) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _getEventTypeColor(eventType).withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            eventType,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )).toList(),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
-            // Title and location
+            // Title, description, and location
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     report.title,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 6),
+                  Text(
+                    report.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.location_on, size: 10, color: Colors.grey[500]),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          report.state,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[500],
-                          ),
+                      Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        report.city.isNotEmpty ? '${report.city}, ${report.state}' : report.state,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
                         ),
                       ),
                     ],
                   ),
+                  if (report.roadUsages.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.directions_car, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          report.roadUsages.join(', '),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

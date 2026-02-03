@@ -21,8 +21,8 @@ type TrafficReport struct {
 	Title       string      `json:"title" binding:"required,min=1,max=200" firestore:"title"`
 	Description string      `json:"description" binding:"required,min=1,max=5000" firestore:"description"`
 	DateTime    time.Time   `json:"dateTime" binding:"required" firestore:"dateTime"`
-	RoadUsage   string      `json:"roadUsage" binding:"required,roadusage" firestore:"roadUsage"`
-	EventType   string      `json:"eventType" binding:"required,eventtype" firestore:"eventType"`
+	RoadUsages  []string    `json:"roadUsages" firestore:"roadUsages"`
+	EventTypes  []string    `json:"eventTypes" firestore:"eventTypes"`
 	State       string      `json:"state" binding:"required,stateorprovince" firestore:"state"`
 	City        string      `json:"city" firestore:"city"`
 	Injuries    string      `json:"injuries" binding:"max=1000" firestore:"injuries"`
@@ -31,6 +31,7 @@ type TrafficReport struct {
 	UpdatedAt    time.Time   `json:"updatedAt" firestore:"updatedAt"`
 	Status       string      `json:"status" firestore:"status"`
 	ReviewReason string      `json:"reviewReason,omitempty" firestore:"review_reason"`
+	Priority     *int        `json:"priority,omitempty" firestore:"priority"`
 }
 
 // ReportStatus constants
@@ -46,8 +47,8 @@ type CreateReportRequest struct {
 	Title       string    `json:"title" binding:"required,min=1,max=200"`
 	Description string    `json:"description" binding:"required,min=1,max=5000"`
 	DateTime    time.Time `json:"dateTime" binding:"required"`
-	RoadUsage   string    `json:"roadUsage" binding:"required,roadusage"`
-	EventType   string    `json:"eventType" binding:"required,eventtype"`
+	RoadUsages  []string  `json:"roadUsages"`
+	EventTypes  []string  `json:"eventTypes"`
 	State       string    `json:"state" binding:"required,stateorprovince"`
 	City        string    `json:"city"`
 	Injuries    string    `json:"injuries" binding:"max=1000"`

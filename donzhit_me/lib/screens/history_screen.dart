@@ -138,9 +138,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
       // Search filter
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
+        final eventTypesMatch = report.eventTypes.any((e) => e.toLowerCase().contains(query));
         if (!report.title.toLowerCase().contains(query) &&
             !report.description.toLowerCase().contains(query) &&
-            !report.eventType.toLowerCase().contains(query)) {
+            !eventTypesMatch) {
           return false;
         }
       }
@@ -150,8 +151,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return false;
       }
 
-      // Event type filter
-      if (_filterEventType != null && report.eventType != _filterEventType) {
+      // Event type filter - check if any event type matches
+      if (_filterEventType != null && !report.eventTypes.contains(_filterEventType)) {
         return false;
       }
 
@@ -367,12 +368,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
               _DetailRow(
                 icon: Icons.directions_car,
                 label: 'Road Usage',
-                value: report.roadUsage,
+                value: report.roadUsages.join(', '),
               ),
               _DetailRow(
                 icon: Icons.warning_amber,
                 label: 'Event Type',
-                value: report.eventType,
+                value: report.eventTypes.join(', '),
               ),
               _DetailRow(
                 icon: Icons.location_on,
@@ -648,7 +649,7 @@ class _ReportListItem extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          report.eventType,
+                          report.eventTypes.join(', '),
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 13,

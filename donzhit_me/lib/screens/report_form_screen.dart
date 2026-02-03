@@ -29,8 +29,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   final _cityController = TextEditingController();
 
   DateTime _selectedDateTime = DateTime.now();
-  String? _selectedRoadUsage;
-  String? _selectedEventType;
+  final Set<String> _selectedRoadUsages = {};
+  final Set<String> _selectedEventTypes = {};
   String? _selectedState;
   String? _selectedCity;
 
@@ -52,8 +52,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       _descriptionController.text = draft.description;
       _injuriesController.text = draft.injuries;
       _selectedDateTime = draft.dateTime;
-      _selectedRoadUsage = draft.roadUsage;
-      _selectedEventType = draft.eventType;
+      _selectedRoadUsages.addAll(draft.roadUsages);
+      _selectedEventTypes.addAll(draft.eventTypes);
       _selectedState = draft.state;
       _selectedCity = draft.city.isNotEmpty ? draft.city : null;
       _cityController.text = draft.city;
@@ -123,12 +123,12 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
               _buildSectionTitle('Classification'),
               const SizedBox(height: 12),
 
-              // Road Usage Dropdown
-              _buildRoadUsageDropdown(),
+              // Road Usage Multi-Select
+              _buildRoadUsageSelector(),
               const SizedBox(height: 16),
 
-              // Event Type Dropdown
-              _buildEventTypeDropdown(),
+              // Event Type Multi-Select
+              _buildEventTypeSelector(),
               const SizedBox(height: 16),
 
               // State Dropdown
@@ -279,58 +279,88 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     );
   }
 
-  Widget _buildRoadUsageDropdown() {
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedRoadUsage,
-      decoration: const InputDecoration(
-        labelText: 'Road Usage',
-        prefixIcon: Icon(Icons.directions_car),
-        border: OutlineInputBorder(),
-      ),
-      items: DropdownOptions.roadUsageTypes
-          .map((type) => DropdownMenuItem(
-                value: type,
-                child: Text(type),
-              ))
-          .toList(),
-      onChanged: (value) {
-        setState(() {
-          _selectedRoadUsage = value;
-        });
-      },
+  Widget _buildRoadUsageSelector() {
+    return FormField<Set<String>>(
+      initialValue: _selectedRoadUsages,
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Please select a road usage type';
+          return 'Please select at least one road usage type';
         }
         return null;
+      },
+      builder: (state) {
+        return InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Road Usage (select all that apply)',
+            prefixIcon: const Icon(Icons.directions_car),
+            border: const OutlineInputBorder(),
+            errorText: state.errorText,
+          ),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: DropdownOptions.roadUsageTypes.map((type) {
+              final isSelected = _selectedRoadUsages.contains(type);
+              return FilterChip(
+                label: Text(type),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedRoadUsages.add(type);
+                    } else {
+                      _selectedRoadUsages.remove(type);
+                    }
+                  });
+                  state.didChange(_selectedRoadUsages);
+                },
+              );
+            }).toList(),
+          ),
+        );
       },
     );
   }
 
-  Widget _buildEventTypeDropdown() {
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedEventType,
-      decoration: const InputDecoration(
-        labelText: 'Event Type',
-        prefixIcon: Icon(Icons.warning_amber),
-        border: OutlineInputBorder(),
-      ),
-      items: DropdownOptions.eventTypes
-          .map((type) => DropdownMenuItem(
-                value: type,
-                child: Text(type),
-              ))
-          .toList(),
-      onChanged: (value) {
-        setState(() {
-          _selectedEventType = value;
-        });
-      },
+  Widget _buildEventTypeSelector() {
+    return FormField<Set<String>>(
+      initialValue: _selectedEventTypes,
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Please select an event type';
+          return 'Please select at least one event type';
         }
         return null;
+      },
+      builder: (state) {
+        return InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Event Type (select all that apply)',
+            prefixIcon: const Icon(Icons.warning_amber),
+            border: const OutlineInputBorder(),
+            errorText: state.errorText,
+          ),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: DropdownOptions.eventTypes.map((type) {
+              final isSelected = _selectedEventTypes.contains(type);
+              return FilterChip(
+                label: Text(type),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedEventTypes.add(type);
+                    } else {
+                      _selectedEventTypes.remove(type);
+                    }
+                  });
+                  state.didChange(_selectedEventTypes);
+                },
+              );
+            }).toList(),
+          ),
+        );
       },
     );
   }
@@ -780,8 +810,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       _injuriesController.clear();
       _cityController.clear();
       _selectedDateTime = DateTime.now();
-      _selectedRoadUsage = null;
-      _selectedEventType = null;
+      _selectedRoadUsages.clear();
+      _selectedEventTypes.clear();
       _selectedState = null;
       _selectedCity = null;
       _selectedMedia.clear();
@@ -795,8 +825,8 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       title: _titleController.text,
       description: _descriptionController.text,
       dateTime: _selectedDateTime,
-      roadUsage: _selectedRoadUsage ?? '',
-      eventType: _selectedEventType ?? '',
+      roadUsages: _selectedRoadUsages.toList(),
+      eventTypes: _selectedEventTypes.toList(),
       state: _selectedState ?? '',
       city: _selectedCity ?? '',
       injuries: _injuriesController.text,

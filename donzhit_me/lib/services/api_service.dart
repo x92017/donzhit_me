@@ -541,8 +541,8 @@ class ApiService {
       request.fields['title'] = report.title;
       request.fields['description'] = report.description;
       request.fields['dateTime'] = report.dateTime.toIso8601String();
-      request.fields['roadUsage'] = report.roadUsage;
-      request.fields['eventType'] = report.eventType;
+      request.fields['roadUsages'] = report.roadUsages.join(',');
+      request.fields['eventTypes'] = report.eventTypes.join(',');
       request.fields['state'] = report.state;
       request.fields['city'] = report.city;
       request.fields['injuries'] = report.injuries;
@@ -844,6 +844,7 @@ class ApiService {
     String reportId, {
     required bool approve,
     String? reason,
+    int? priority, // 1-5, only used when approving (1=highest priority)
   }) async {
     try {
       final url = Uri.parse('$_baseUrl/admin/reports/$reportId/review');
@@ -852,6 +853,7 @@ class ApiService {
       final body = {
         'status': approve ? 'reviewed_pass' : 'reviewed_fail',
         if (reason != null) 'reason': reason,
+        if (approve && priority != null) 'priority': priority,
       };
 
       final response = await _client.post(

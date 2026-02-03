@@ -78,42 +78,42 @@ class DonzHitLogoHorizontal extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      padding: const EdgeInsets.only(left: 4, right: 12, top: 6, bottom: 6),
+      padding: const EdgeInsets.only(left: 0, right: 12, top: 6, bottom: 6),
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end, // Align to bottom
         children: [
           // Walking person on left - 25% bigger, less padding
-          Icon(
-            Icons.hiking,
-            color: Colors.white,
-            size: height * 0.625, // 25% bigger (0.5 * 1.25)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Icon(
+              Icons.hiking,
+              color: Colors.white,
+              size: height * 0.625, // 25% bigger (0.5 * 1.25)
+            ),
           ),
           // DonzHit.me text with car positioned over "onz"
           Stack(
             clipBehavior: Clip.none,
             children: [
-              // DonzHit.me text - 25% bigger
-              Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: Text(
-                  'DonzHit.me',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontSize: height * 0.275, // 25% bigger (0.22 * 1.25)
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+              // DonzHit.me text - 15% bigger than before
+              Text(
+                'DonzHit.me',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: height * 0.316, // 15% bigger (0.275 * 1.15)
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
               // Car on top, positioned over "onz"
               Positioned(
-                top: -4,
-                left: 14, // Moved 4% left from 18
+                top: -(height * 0.32),
+                left: 16,
                 child: Transform(
                   transform: Matrix4.identity()
                     ..scale(1.15, 0.85), // 15% wider, 15% flatter

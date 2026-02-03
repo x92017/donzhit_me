@@ -45,6 +45,9 @@ type Client interface {
 	// UpdateReportStatus updates a report's status and optional review reason
 	UpdateReportStatus(ctx context.Context, reportID, status, reviewReason string) error
 
+	// UpdateReportStatusWithPriority updates a report's status, review reason, and priority
+	UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int) error
+
 	// User management methods
 
 	// CreateOrUpdateUser creates a new user or updates an existing one

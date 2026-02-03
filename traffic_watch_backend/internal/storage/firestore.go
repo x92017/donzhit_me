@@ -260,6 +260,26 @@ func (f *FirestoreClient) UpdateReportStatus(ctx context.Context, reportID, stat
 	return err
 }
 
+// UpdateReportStatusWithPriority updates a report's status, review reason, and priority
+func (f *FirestoreClient) UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int) error {
+	report, err := f.GetReport(ctx, reportID)
+	if err != nil {
+		return err
+	}
+
+	if report.Status == models.StatusDeleted {
+		return errors.New("report not found")
+	}
+
+	report.Status = status
+	report.ReviewReason = reviewReason
+	report.Priority = priority
+	report.UpdatedAt = time.Now()
+
+	_, err = f.client.Collection(reportsCollection).Doc(reportID).Set(ctx, report)
+	return err
+}
+
 // ============================================================================
 // User Management Methods (Firestore implementation)
 // Note: For production use with Firestore, these would need proper implementation.

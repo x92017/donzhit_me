@@ -4,12 +4,16 @@ import '../constants/dropdown_options.dart';
 import '../providers/settings_provider.dart';
 import '../providers/report_provider.dart';
 import '../services/storage_service.dart';
+import '../services/api_service.dart';
+import '../widgets/donzhit_logo.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final apiService = ApiService();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -19,6 +23,17 @@ class SettingsScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Signed-in user info
+              if (apiService.isSignedIn) ...[
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.account_circle),
+                    title: const Text('Signed in as'),
+                    subtitle: Text(apiService.userEmail ?? 'Unknown'),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
               // Appearance Section
               _buildSectionHeader(context, 'Appearance'),
               Card(
@@ -159,21 +174,8 @@ class SettingsScreen extends StatelessWidget {
               Center(
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.traffic,
-                      size: 48,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                    const DonzHitLogoHorizontal(height: 62),
                     const SizedBox(height: 8),
-                    Text(
-                      'DonzHit.me',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     Text(
                       'Report traffic violations safely',
                       style: TextStyle(

@@ -238,16 +238,17 @@ class ReportProvider with ChangeNotifier {
 
   /// Get reports by event type
   List<TrafficReport> getReportsByEventType(String eventType) {
-    return _reports.where((r) => r.eventType == eventType).toList();
+    return _reports.where((r) => r.eventTypes.contains(eventType)).toList();
   }
 
   /// Search reports
   List<TrafficReport> searchReports(String query) {
     final lowerQuery = query.toLowerCase();
     return _reports.where((r) {
+      final eventTypesMatch = r.eventTypes.any((e) => e.toLowerCase().contains(lowerQuery));
       return r.title.toLowerCase().contains(lowerQuery) ||
           r.description.toLowerCase().contains(lowerQuery) ||
-          r.eventType.toLowerCase().contains(lowerQuery) ||
+          eventTypesMatch ||
           r.state.toLowerCase().contains(lowerQuery);
     }).toList();
   }
@@ -312,7 +313,7 @@ class ReportProvider with ChangeNotifier {
   }
 
   /// Approve or reject a report (requires admin role)
-  Future<bool> reviewReport(String reportId, {required bool approve, String? reason}) async {
+  Future<bool> reviewReport(String reportId, {required bool approve, String? reason, int? priority}) async {
     _setLoading(true);
     _clearError();
 
@@ -320,6 +321,7 @@ class ReportProvider with ChangeNotifier {
       reportId,
       approve: approve,
       reason: reason,
+      priority: priority,
     );
 
     if (response.isSuccess) {
@@ -332,12 +334,25 @@ class ReportProvider with ChangeNotifier {
         _allReportsAdmin[adminIndex] = _allReportsAdmin[adminIndex].copyWith(
           status: approve ? ReportStatus.reviewedPass : ReportStatus.reviewedFail,
           reviewReason: reason,
+          priority: priority,
         );
       }
 
-      // If approved, add to approved reports
+      // If approved, add to approved reports (at position based on priority)
       if (approve && adminIndex >= 0) {
-        _approvedReports.insert(0, _allReportsAdmin[adminIndex]);
+        final updatedReport = _allReportsAdmin[adminIndex];
+        // Insert at position based on priority (lower priority value = higher in list)
+        int insertIndex = 0;
+        for (int i = 0; i < _approvedReports.length; i++) {
+          final existingPriority = _approvedReports[i].priority ?? 3;
+          final newPriority = priority ?? 3;
+          if (newPriority <= existingPriority) {
+            insertIndex = i;
+            break;
+          }
+          insertIndex = i + 1;
+        }
+        _approvedReports.insert(insertIndex, updatedReport);
       }
 
       notifyListeners();

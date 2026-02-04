@@ -29,6 +29,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   final TextEditingController _cityController = TextEditingController();
   final ApiService _apiService = ApiService();
   bool _isSigningIn = false;
+  bool _hasInitializedDefaultState = false;
 
   // Event type categories for filtering
   static const List<String> _categories = [
@@ -46,18 +47,23 @@ class _GalleryScreenState extends State<GalleryScreen> {
     _apiService.initialize();
     // Listen for auth state changes to update UI when auto sign-in completes
     _apiService.addAuthStateListener(_onAuthStateChanged);
-    // Load default state from settings
-    _loadDefaultState();
     // Fetch approved reports on init
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ReportProvider>().fetchApprovedReports();
     });
   }
 
-  void _loadDefaultState() {
-    final settings = context.read<SettingsProvider>();
-    if (_selectedState == null && settings.defaultState.isNotEmpty) {
-      _selectedState = settings.defaultState;
+  void _initializeDefaultStateIfNeeded(SettingsProvider settings) {
+    // Only initialize once, and only if user hasn't manually selected a state
+    if (!_hasInitializedDefaultState && _selectedState == null && settings.defaultState.isNotEmpty) {
+      _hasInitializedDefaultState = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedState = settings.defaultState;
+          });
+        }
+      });
     }
   }
 
@@ -136,6 +142,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch settings to initialize default state when settings are loaded
+    final settings = context.watch<SettingsProvider>();
+    _initializeDefaultStateIfNeeded(settings);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,

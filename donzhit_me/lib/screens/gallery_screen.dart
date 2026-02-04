@@ -46,9 +46,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
     _apiService.initialize();
     // Listen for auth state changes to update UI when auto sign-in completes
     _apiService.addAuthStateListener(_onAuthStateChanged);
-    // Load default state from settings and fetch approved reports on init
+    // Load default state from settings
+    _loadDefaultState();
+    // Fetch approved reports on init
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDefaultState();
       context.read<ReportProvider>().fetchApprovedReports();
     });
   }
@@ -56,9 +57,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   void _loadDefaultState() {
     final settings = context.read<SettingsProvider>();
     if (_selectedState == null && settings.defaultState.isNotEmpty) {
-      setState(() {
-        _selectedState = settings.defaultState;
-      });
+      _selectedState = settings.defaultState;
     }
   }
 

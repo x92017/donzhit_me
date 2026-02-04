@@ -168,6 +168,15 @@ func main() {
 		publicGroup := v1.Group("/public")
 		{
 			publicGroup.GET("/reports", reportsHandler.ListApprovedReports)
+			publicGroup.GET("/reports/:id/comments", reportsHandler.GetComments)
+		}
+
+		// Public endpoints with optional auth (for user-specific data like "did I react?")
+		publicOptionalAuth := v1.Group("/public")
+		publicOptionalAuth.Use(middleware.OptionalJWTAuth(jwtService, storageClient))
+		{
+			publicOptionalAuth.GET("/reports/:id/engagement", reportsHandler.GetReportEngagement)
+			publicOptionalAuth.POST("/reports/engagement", reportsHandler.GetBulkEngagement)
 		}
 
 		// Auth endpoints (login requires Google token, not JWT)
@@ -194,6 +203,14 @@ func main() {
 			jwtProtected.GET("/reports", reportsHandler.ListReports)
 			jwtProtected.GET("/reports/:id", reportsHandler.GetReport)
 			jwtProtected.DELETE("/reports/:id", reportsHandler.DeleteReport)
+
+			// Reactions endpoints (requires auth)
+			jwtProtected.POST("/reports/:id/reactions", reportsHandler.AddReaction)
+			jwtProtected.DELETE("/reports/:id/reactions/:type", reportsHandler.RemoveReaction)
+
+			// Comments endpoints (requires auth)
+			jwtProtected.POST("/reports/:id/comments", reportsHandler.AddComment)
+			jwtProtected.DELETE("/reports/:id/comments/:commentId", reportsHandler.DeleteComment)
 		}
 
 		// Admin routes (requires JWT + admin role)

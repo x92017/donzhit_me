@@ -366,3 +366,72 @@ func (f *FirestoreClient) RevokeUserToken(ctx context.Context, userID string) er
 	})
 	return err
 }
+
+// ============================================================================
+// Reaction Methods (Firestore stub implementations)
+// Note: These are stub implementations. Full Firestore support for reactions
+// would require proper subcollection design.
+// ============================================================================
+
+// AddReaction adds a reaction to a report (stub - not implemented for Firestore)
+func (f *FirestoreClient) AddReaction(ctx context.Context, reaction *models.Reaction) error {
+	return errors.New("reactions not implemented for Firestore backend")
+}
+
+// RemoveReaction removes a reaction from a report (stub - not implemented for Firestore)
+func (f *FirestoreClient) RemoveReaction(ctx context.Context, reportID, userID, reactionType string) error {
+	return errors.New("reactions not implemented for Firestore backend")
+}
+
+// GetReactionCounts gets the count of each reaction type for a report (stub)
+func (f *FirestoreClient) GetReactionCounts(ctx context.Context, reportID string) ([]models.ReactionCount, error) {
+	return []models.ReactionCount{}, nil
+}
+
+// GetUserReactions gets the reaction types a user has made on a report (stub)
+func (f *FirestoreClient) GetUserReactions(ctx context.Context, reportID, userID string) ([]string, error) {
+	return []string{}, nil
+}
+
+// GetReportEngagement gets all reactions and comments for a report (stub)
+func (f *FirestoreClient) GetReportEngagement(ctx context.Context, reportID, userID string) (*models.ReportEngagement, error) {
+	return &models.ReportEngagement{
+		ReportID:       reportID,
+		ReactionCounts: []models.ReactionCount{},
+		UserReactions:  []string{},
+		CommentCount:   0,
+	}, nil
+}
+
+// GetBulkReportEngagement gets engagement data for multiple reports (stub)
+func (f *FirestoreClient) GetBulkReportEngagement(ctx context.Context, reportIDs []string, userID string) (map[string]*models.ReportEngagement, error) {
+	result := make(map[string]*models.ReportEngagement)
+	for _, id := range reportIDs {
+		result[id] = &models.ReportEngagement{
+			ReportID:       id,
+			ReactionCounts: []models.ReactionCount{},
+			UserReactions:  []string{},
+			CommentCount:   0,
+		}
+	}
+	return result, nil
+}
+
+// ============================================================================
+// Comment Methods (Firestore stub implementations)
+// ============================================================================
+
+// AddComment adds a comment to a report (stub - not implemented for Firestore)
+func (f *FirestoreClient) AddComment(ctx context.Context, comment *models.Comment) error {
+	return errors.New("comments not implemented for Firestore backend")
+}
+
+// GetComments gets all comments for a report (stub)
+func (f *FirestoreClient) GetComments(ctx context.Context, reportID string) ([]models.Comment, error) {
+	return []models.Comment{}, nil
+}
+
+// DeleteComment deletes a comment (stub - not implemented for Firestore)
+func (f *FirestoreClient) DeleteComment(ctx context.Context, commentID, userID string) error {
+	return errors.New("comments not implemented for Firestore backend")
+}

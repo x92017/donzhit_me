@@ -293,3 +293,154 @@ extension ReportStatusExtension on ReportStatus {
     }
   }
 }
+
+/// Reaction types for reports
+enum ReactionType {
+  thumbsUp,
+  thumbsDown,
+  angryCar,
+  angryPedestrian,
+  angryBicycle,
+}
+
+extension ReactionTypeExtension on ReactionType {
+  String get apiValue {
+    switch (this) {
+      case ReactionType.thumbsUp:
+        return 'thumbs_up';
+      case ReactionType.thumbsDown:
+        return 'thumbs_down';
+      case ReactionType.angryCar:
+        return 'angry_car';
+      case ReactionType.angryPedestrian:
+        return 'angry_pedestrian';
+      case ReactionType.angryBicycle:
+        return 'angry_bicycle';
+    }
+  }
+
+  static ReactionType fromApiValue(String value) {
+    switch (value) {
+      case 'thumbs_up':
+        return ReactionType.thumbsUp;
+      case 'thumbs_down':
+        return ReactionType.thumbsDown;
+      case 'angry_car':
+        return ReactionType.angryCar;
+      case 'angry_pedestrian':
+        return ReactionType.angryPedestrian;
+      case 'angry_bicycle':
+        return ReactionType.angryBicycle;
+      default:
+        return ReactionType.thumbsUp;
+    }
+  }
+}
+
+/// Reaction count for a specific type
+class ReactionCount {
+  final ReactionType type;
+  final int count;
+
+  ReactionCount({required this.type, required this.count});
+
+  factory ReactionCount.fromJson(Map<String, dynamic> json) {
+    return ReactionCount(
+      type: ReactionTypeExtension.fromApiValue(json['reactionType'] as String),
+      count: json['count'] as int,
+    );
+  }
+}
+
+/// Comment on a report
+class Comment {
+  final String id;
+  final String reportId;
+  final String userId;
+  final String userEmail;
+  final String content;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Comment({
+    required this.id,
+    required this.reportId,
+    required this.userId,
+    required this.userEmail,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Comment.fromJson(Map<String, dynamic> json) {
+    return Comment(
+      id: json['id'] as String,
+      reportId: json['reportId'] as String,
+      userId: json['userId'] as String,
+      userEmail: json['userEmail'] as String,
+      content: json['content'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
+
+  /// Get a display name from email (part before @)
+  String get displayName {
+    final atIndex = userEmail.indexOf('@');
+    return atIndex > 0 ? userEmail.substring(0, atIndex) : userEmail;
+  }
+}
+
+/// Engagement data for a report (reactions and comments)
+class ReportEngagement {
+  final String reportId;
+  final Map<ReactionType, int> reactionCounts;
+  final Set<ReactionType> userReactions;
+  final int commentCount;
+  final List<Comment> comments;
+
+  ReportEngagement({
+    required this.reportId,
+    required this.reactionCounts,
+    required this.userReactions,
+    required this.commentCount,
+    this.comments = const [],
+  });
+
+  factory ReportEngagement.fromJson(Map<String, dynamic> json) {
+    final reactionCounts = <ReactionType, int>{};
+    final countsJson = json['reactionCounts'] as List<dynamic>? ?? [];
+    for (final countJson in countsJson) {
+      final rc = ReactionCount.fromJson(countJson as Map<String, dynamic>);
+      reactionCounts[rc.type] = rc.count;
+    }
+
+    final userReactionsJson = json['userReactions'] as List<dynamic>? ?? [];
+    final userReactions = userReactionsJson
+        .map((r) => ReactionTypeExtension.fromApiValue(r as String))
+        .toSet();
+
+    final commentsJson = json['comments'] as List<dynamic>? ?? [];
+    final comments = commentsJson
+        .map((c) => Comment.fromJson(c as Map<String, dynamic>))
+        .toList();
+
+    return ReportEngagement(
+      reportId: json['reportId'] as String,
+      reactionCounts: reactionCounts,
+      userReactions: userReactions,
+      commentCount: json['commentCount'] as int? ?? 0,
+      comments: comments,
+    );
+  }
+
+  /// Get count for a specific reaction type
+  int getCount(ReactionType type) => reactionCounts[type] ?? 0;
+
+  /// Check if user has made a specific reaction
+  bool hasUserReacted(ReactionType type) => userReactions.contains(type);
+
+  /// Get total reaction count
+  int get totalReactions =>
+      reactionCounts.values.fold(0, (sum, count) => sum + count);
+}

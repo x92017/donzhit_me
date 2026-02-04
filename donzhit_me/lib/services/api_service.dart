@@ -893,6 +893,229 @@ class ApiService {
     }
   }
 
+  // ============================================================================
+  // Reactions Endpoints
+  // ============================================================================
+
+  /// Add a reaction to a report (requires auth)
+  Future<ApiResponse<void>> addReaction(String reportId, ReactionType type) async {
+    try {
+      final url = Uri.parse('$_baseUrl/reports/$reportId/reactions');
+      final headers = await _getHeaders();
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: jsonEncode({'reactionType': type.apiValue}),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return ApiResponse.success(null);
+      } else if (response.statusCode == 401) {
+        return ApiResponse.error(
+          'Please sign in to react.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to add reaction: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// Remove a reaction from a report (requires auth)
+  Future<ApiResponse<void>> removeReaction(String reportId, ReactionType type) async {
+    try {
+      final url = Uri.parse('$_baseUrl/reports/$reportId/reactions/${type.apiValue}');
+      final headers = await _getHeaders();
+
+      final response = await _client.delete(url, headers: headers);
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return ApiResponse.success(null);
+      } else if (response.statusCode == 401) {
+        return ApiResponse.error(
+          'Please sign in to react.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to remove reaction: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// Get engagement data for a report (public, but user reactions require auth)
+  Future<ApiResponse<ReportEngagement>> getReportEngagement(String reportId) async {
+    try {
+      final url = Uri.parse('$_baseUrl/public/reports/$reportId/engagement');
+
+      // Get headers with optional auth
+      final headers = <String, String>{
+        'Accept': 'application/json',
+      };
+      final token = await _getAuthToken();
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return ApiResponse.success(ReportEngagement.fromJson(data));
+      } else {
+        return ApiResponse.error(
+          'Failed to get engagement: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// Get engagement data for multiple reports (public, but user reactions require auth)
+  Future<ApiResponse<Map<String, ReportEngagement>>> getBulkEngagement(List<String> reportIds) async {
+    try {
+      final url = Uri.parse('$_baseUrl/public/reports/engagement');
+
+      // Get headers with optional auth
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      final token = await _getAuthToken();
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: jsonEncode({'reportIds': reportIds}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final engagementsJson = data['engagements'] as Map<String, dynamic>? ?? {};
+        final engagements = <String, ReportEngagement>{};
+        for (final entry in engagementsJson.entries) {
+          engagements[entry.key] = ReportEngagement.fromJson(entry.value as Map<String, dynamic>);
+        }
+        return ApiResponse.success(engagements);
+      } else {
+        return ApiResponse.error(
+          'Failed to get bulk engagement: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  // ============================================================================
+  // Comments Endpoints
+  // ============================================================================
+
+  /// Add a comment to a report (requires auth)
+  Future<ApiResponse<Comment>> addComment(String reportId, String content) async {
+    try {
+      final url = Uri.parse('$_baseUrl/reports/$reportId/comments');
+      final headers = await _getHeaders();
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: jsonEncode({'content': content}),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return ApiResponse.success(Comment.fromJson(data));
+      } else if (response.statusCode == 401) {
+        return ApiResponse.error(
+          'Please sign in to comment.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to add comment: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// Get comments for a report (public)
+  Future<ApiResponse<List<Comment>>> getComments(String reportId) async {
+    try {
+      final url = Uri.parse('$_baseUrl/public/reports/$reportId/comments');
+
+      final response = await _client.get(url, headers: {
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final commentsList = data['comments'] as List<dynamic>? ?? [];
+        final comments = commentsList
+            .map((c) => Comment.fromJson(c as Map<String, dynamic>))
+            .toList();
+        return ApiResponse.success(comments);
+      } else {
+        return ApiResponse.error(
+          'Failed to get comments: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
+  /// Delete a comment (requires auth, only owner can delete)
+  Future<ApiResponse<void>> deleteComment(String reportId, String commentId) async {
+    try {
+      final url = Uri.parse('$_baseUrl/reports/$reportId/comments/$commentId');
+      final headers = await _getHeaders();
+
+      final response = await _client.delete(url, headers: headers);
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return ApiResponse.success(null);
+      } else if (response.statusCode == 401) {
+        return ApiResponse.error(
+          'Please sign in to delete comments.',
+          statusCode: response.statusCode,
+        );
+      } else if (response.statusCode == 404) {
+        return ApiResponse.error(
+          'Comment not found or not authorized.',
+          statusCode: response.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          'Failed to delete comment: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Network error: $e');
+    }
+  }
+
   /// Dispose the client when done
   void dispose() {
     _authSubscription?.cancel();

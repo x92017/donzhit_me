@@ -354,13 +354,13 @@ func (p *PostgresClient) ListReportsAwaitingReview(ctx context.Context) ([]model
 }
 
 // ListApprovedReports retrieves reports with "reviewed_pass" status (for public feed)
-// Sorted by priority (1=highest) first, then by date descending
+// Sorted by priority (higher number = higher priority) first, then by date descending
 func (p *PostgresClient) ListApprovedReports(ctx context.Context) ([]models.TrafficReport, error) {
 	rows, err := p.pool.Query(ctx, `
 		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, status, created_at, updated_at, COALESCE(review_reason, ''), priority
 		FROM reports
 		WHERE status = $1
-		ORDER BY COALESCE(priority, 3) ASC, created_at DESC
+		ORDER BY COALESCE(priority, 100) DESC, created_at DESC
 	`, models.StatusReviewedPass)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list approved reports: %w", err)
@@ -598,6 +598,271 @@ func (p *PostgresClient) RevokeUserToken(ctx context.Context, userID string) err
 	`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke token: %w", err)
+	}
+	return nil
+}
+
+// ============================================================================
+// Reaction Methods
+// ============================================================================
+
+// AddReaction adds a reaction to a report
+func (p *PostgresClient) AddReaction(ctx context.Context, reaction *models.Reaction) error {
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO report_reactions (id, report_id, user_id, user_email, reaction_type, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (report_id, user_id, reaction_type) DO NOTHING
+	`, reaction.ID, reaction.ReportID, reaction.UserID, reaction.UserEmail, reaction.ReactionType, reaction.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to add reaction: %w", err)
+	}
+	return nil
+}
+
+// RemoveReaction removes a reaction from a report
+func (p *PostgresClient) RemoveReaction(ctx context.Context, reportID, userID, reactionType string) error {
+	_, err := p.pool.Exec(ctx, `
+		DELETE FROM report_reactions WHERE report_id = $1 AND user_id = $2 AND reaction_type = $3
+	`, reportID, userID, reactionType)
+	if err != nil {
+		return fmt.Errorf("failed to remove reaction: %w", err)
+	}
+	return nil
+}
+
+// GetReactionCounts gets the count of each reaction type for a report
+func (p *PostgresClient) GetReactionCounts(ctx context.Context, reportID string) ([]models.ReactionCount, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT reaction_type, COUNT(*) as count
+		FROM report_reactions
+		WHERE report_id = $1
+		GROUP BY reaction_type
+	`, reportID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reaction counts: %w", err)
+	}
+	defer rows.Close()
+
+	var counts []models.ReactionCount
+	for rows.Next() {
+		var rc models.ReactionCount
+		if err := rows.Scan(&rc.ReactionType, &rc.Count); err != nil {
+			return nil, fmt.Errorf("failed to scan reaction count: %w", err)
+		}
+		counts = append(counts, rc)
+	}
+
+	if counts == nil {
+		counts = []models.ReactionCount{}
+	}
+	return counts, nil
+}
+
+// GetUserReactions gets the reaction types a user has made on a report
+func (p *PostgresClient) GetUserReactions(ctx context.Context, reportID, userID string) ([]string, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT reaction_type FROM report_reactions WHERE report_id = $1 AND user_id = $2
+	`, reportID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user reactions: %w", err)
+	}
+	defer rows.Close()
+
+	var reactions []string
+	for rows.Next() {
+		var reactionType string
+		if err := rows.Scan(&reactionType); err != nil {
+			return nil, fmt.Errorf("failed to scan reaction type: %w", err)
+		}
+		reactions = append(reactions, reactionType)
+	}
+
+	if reactions == nil {
+		reactions = []string{}
+	}
+	return reactions, nil
+}
+
+// GetReportEngagement gets all reactions and comments for a report
+func (p *PostgresClient) GetReportEngagement(ctx context.Context, reportID, userID string) (*models.ReportEngagement, error) {
+	engagement := &models.ReportEngagement{
+		ReportID: reportID,
+	}
+
+	// Get reaction counts
+	counts, err := p.GetReactionCounts(ctx, reportID)
+	if err != nil {
+		return nil, err
+	}
+	engagement.ReactionCounts = counts
+
+	// Get user reactions if userID provided
+	if userID != "" {
+		userReactions, err := p.GetUserReactions(ctx, reportID, userID)
+		if err != nil {
+			return nil, err
+		}
+		engagement.UserReactions = userReactions
+	} else {
+		engagement.UserReactions = []string{}
+	}
+
+	// Get comment count
+	var commentCount int
+	err = p.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM report_comments WHERE report_id = $1
+	`, reportID).Scan(&commentCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get comment count: %w", err)
+	}
+	engagement.CommentCount = commentCount
+
+	return engagement, nil
+}
+
+// GetBulkReportEngagement gets engagement data for multiple reports efficiently
+func (p *PostgresClient) GetBulkReportEngagement(ctx context.Context, reportIDs []string, userID string) (map[string]*models.ReportEngagement, error) {
+	engagements := make(map[string]*models.ReportEngagement)
+	for _, id := range reportIDs {
+		engagements[id] = &models.ReportEngagement{
+			ReportID:       id,
+			ReactionCounts: []models.ReactionCount{},
+			UserReactions:  []string{},
+			CommentCount:   0,
+		}
+	}
+
+	if len(reportIDs) == 0 {
+		return engagements, nil
+	}
+
+	// Get reaction counts for all reports
+	rows, err := p.pool.Query(ctx, `
+		SELECT report_id, reaction_type, COUNT(*) as count
+		FROM report_reactions
+		WHERE report_id = ANY($1)
+		GROUP BY report_id, reaction_type
+	`, reportIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bulk reaction counts: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var reportID, reactionType string
+		var count int
+		if err := rows.Scan(&reportID, &reactionType, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan reaction count: %w", err)
+		}
+		if e, ok := engagements[reportID]; ok {
+			e.ReactionCounts = append(e.ReactionCounts, models.ReactionCount{
+				ReactionType: reactionType,
+				Count:        count,
+			})
+		}
+	}
+
+	// Get user reactions if userID provided
+	if userID != "" {
+		userRows, err := p.pool.Query(ctx, `
+			SELECT report_id, reaction_type FROM report_reactions WHERE report_id = ANY($1) AND user_id = $2
+		`, reportIDs, userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get bulk user reactions: %w", err)
+		}
+		defer userRows.Close()
+
+		for userRows.Next() {
+			var reportID, reactionType string
+			if err := userRows.Scan(&reportID, &reactionType); err != nil {
+				return nil, fmt.Errorf("failed to scan user reaction: %w", err)
+			}
+			if e, ok := engagements[reportID]; ok {
+				e.UserReactions = append(e.UserReactions, reactionType)
+			}
+		}
+	}
+
+	// Get comment counts
+	countRows, err := p.pool.Query(ctx, `
+		SELECT report_id, COUNT(*) as count
+		FROM report_comments
+		WHERE report_id = ANY($1)
+		GROUP BY report_id
+	`, reportIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bulk comment counts: %w", err)
+	}
+	defer countRows.Close()
+
+	for countRows.Next() {
+		var reportID string
+		var count int
+		if err := countRows.Scan(&reportID, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan comment count: %w", err)
+		}
+		if e, ok := engagements[reportID]; ok {
+			e.CommentCount = count
+		}
+	}
+
+	return engagements, nil
+}
+
+// ============================================================================
+// Comment Methods
+// ============================================================================
+
+// AddComment adds a comment to a report
+func (p *PostgresClient) AddComment(ctx context.Context, comment *models.Comment) error {
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO report_comments (id, report_id, user_id, user_email, content, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, comment.ID, comment.ReportID, comment.UserID, comment.UserEmail, comment.Content, comment.CreatedAt, comment.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to add comment: %w", err)
+	}
+	return nil
+}
+
+// GetComments gets all comments for a report
+func (p *PostgresClient) GetComments(ctx context.Context, reportID string) ([]models.Comment, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, report_id, user_id, user_email, content, created_at, updated_at
+		FROM report_comments
+		WHERE report_id = $1
+		ORDER BY created_at ASC
+	`, reportID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get comments: %w", err)
+	}
+	defer rows.Close()
+
+	var comments []models.Comment
+	for rows.Next() {
+		var c models.Comment
+		if err := rows.Scan(&c.ID, &c.ReportID, &c.UserID, &c.UserEmail, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan comment: %w", err)
+		}
+		comments = append(comments, c)
+	}
+
+	if comments == nil {
+		comments = []models.Comment{}
+	}
+	return comments, nil
+}
+
+// DeleteComment deletes a comment (only if user owns it)
+func (p *PostgresClient) DeleteComment(ctx context.Context, commentID, userID string) error {
+	result, err := p.pool.Exec(ctx, `
+		DELETE FROM report_comments WHERE id = $1 AND user_id = $2
+	`, commentID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete comment: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("comment not found or not authorized")
 	}
 	return nil
 }

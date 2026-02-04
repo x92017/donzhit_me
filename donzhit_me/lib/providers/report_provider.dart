@@ -341,12 +341,12 @@ class ReportProvider with ChangeNotifier {
       // If approved, add to approved reports (at position based on priority)
       if (approve && adminIndex >= 0) {
         final updatedReport = _allReportsAdmin[adminIndex];
-        // Insert at position based on priority (lower priority value = higher in list)
+        // Insert at position based on priority (higher priority value = higher in list)
         int insertIndex = 0;
         for (int i = 0; i < _approvedReports.length; i++) {
-          final existingPriority = _approvedReports[i].priority ?? 3;
-          final newPriority = priority ?? 3;
-          if (newPriority <= existingPriority) {
+          final existingPriority = _approvedReports[i].priority ?? 100;
+          final newPriority = priority ?? 100;
+          if (newPriority >= existingPriority) {
             insertIndex = i;
             break;
           }

@@ -67,4 +67,35 @@ type Client interface {
 
 	// RevokeUserToken revokes the user's current token by clearing the refresh token
 	RevokeUserToken(ctx context.Context, userID string) error
+
+	// Reaction methods
+
+	// AddReaction adds a reaction to a report
+	AddReaction(ctx context.Context, reaction *models.Reaction) error
+
+	// RemoveReaction removes a reaction from a report
+	RemoveReaction(ctx context.Context, reportID, userID, reactionType string) error
+
+	// GetReactionCounts gets the count of each reaction type for a report
+	GetReactionCounts(ctx context.Context, reportID string) ([]models.ReactionCount, error)
+
+	// GetUserReactions gets the reaction types a user has made on a report
+	GetUserReactions(ctx context.Context, reportID, userID string) ([]string, error)
+
+	// GetReportEngagement gets all reactions and comments for a report
+	GetReportEngagement(ctx context.Context, reportID, userID string) (*models.ReportEngagement, error)
+
+	// GetBulkReportEngagement gets engagement data for multiple reports
+	GetBulkReportEngagement(ctx context.Context, reportIDs []string, userID string) (map[string]*models.ReportEngagement, error)
+
+	// Comment methods
+
+	// AddComment adds a comment to a report
+	AddComment(ctx context.Context, comment *models.Comment) error
+
+	// GetComments gets all comments for a report
+	GetComments(ctx context.Context, reportID string) ([]models.Comment, error)
+
+	// DeleteComment deletes a comment (only if user owns it)
+	DeleteComment(ctx context.Context, commentID, userID string) error
 }

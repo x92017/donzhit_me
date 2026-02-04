@@ -65,3 +65,58 @@ type UserInfo struct {
 	Email   string `json:"email"`
 	Subject string `json:"sub"`
 }
+
+// ReactionType constants
+const (
+	ReactionThumbsUp        = "thumbs_up"
+	ReactionThumbsDown      = "thumbs_down"
+	ReactionAngryCar        = "angry_car"
+	ReactionAngryPedestrian = "angry_pedestrian"
+	ReactionAngryBicycle    = "angry_bicycle"
+)
+
+// Reaction represents a user reaction to a report
+type Reaction struct {
+	ID           string    `json:"id"`
+	ReportID     string    `json:"reportId"`
+	UserID       string    `json:"userId"`
+	UserEmail    string    `json:"userEmail"`
+	ReactionType string    `json:"reactionType"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+// Comment represents a user comment on a report
+type Comment struct {
+	ID        string    `json:"id"`
+	ReportID  string    `json:"reportId"`
+	UserID    string    `json:"userId"`
+	UserEmail string    `json:"userEmail"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ReactionCount represents the count of a specific reaction type
+type ReactionCount struct {
+	ReactionType string `json:"reactionType"`
+	Count        int    `json:"count"`
+}
+
+// ReportEngagement represents reactions and comments for a report
+type ReportEngagement struct {
+	ReportID       string          `json:"reportId"`
+	ReactionCounts []ReactionCount `json:"reactionCounts"`
+	UserReactions  []string        `json:"userReactions"` // Reaction types the current user has made
+	CommentCount   int             `json:"commentCount"`
+	Comments       []Comment       `json:"comments,omitempty"`
+}
+
+// AddReactionRequest represents a request to add a reaction
+type AddReactionRequest struct {
+	ReactionType string `json:"reactionType" binding:"required"`
+}
+
+// AddCommentRequest represents a request to add a comment
+type AddCommentRequest struct {
+	Content string `json:"content" binding:"required,min=1,max=1000"`
+}

@@ -629,17 +629,6 @@ func (h *ReportsHandler) ReviewReport(c *gin.Context) {
 		return
 	}
 
-	// Validate priority (1-5) if provided for approved reports
-	if req.Status == models.StatusReviewedPass && req.Priority != nil {
-		if *req.Priority < 1 || *req.Priority > 5 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   "validation_error",
-				"message": "priority must be between 1 and 5",
-			})
-			return
-		}
-	}
-
 	// Use UpdateReportStatusWithPriority when approving with priority
 	var err error
 	if req.Status == models.StatusReviewedPass && req.Priority != nil {
@@ -670,5 +659,318 @@ func (h *ReportsHandler) ReviewReport(c *gin.Context) {
 		"message":  "report reviewed successfully",
 		"status":   req.Status,
 		"priority": req.Priority,
+	})
+}
+
+// ============================================================================
+// Reaction Endpoints
+// ============================================================================
+
+// AddReaction handles POST /v1/reports/:id/reactions
+// Adds a reaction to a report (requires auth)
+func (h *ReportsHandler) AddReaction(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	reportID := c.Param("id")
+	if !validation.ValidateUUID(reportID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid report ID format",
+		})
+		return
+	}
+
+	var req models.AddReactionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Validate reaction type
+	validReactions := map[string]bool{
+		models.ReactionThumbsUp:        true,
+		models.ReactionThumbsDown:      true,
+		models.ReactionAngryCar:        true,
+		models.ReactionAngryPedestrian: true,
+		models.ReactionAngryBicycle:    true,
+	}
+	if !validReactions[req.ReactionType] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid reaction type",
+		})
+		return
+	}
+
+	// Get user email from stored user info
+	storedUser, err := h.storage.GetUserByID(c.Request.Context(), user.Subject)
+	userEmail := user.Email
+	if err == nil && storedUser != nil {
+		userEmail = storedUser.Email
+	}
+
+	reaction := &models.Reaction{
+		ID:           uuid.New().String(),
+		ReportID:     reportID,
+		UserID:       user.Subject,
+		UserEmail:    userEmail,
+		ReactionType: req.ReactionType,
+		CreatedAt:    time.Now(),
+	}
+
+	if err := h.storage.AddReaction(c.Request.Context(), reaction); err != nil {
+		log.Printf("Failed to add reaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "create_failed",
+			"message": "failed to add reaction",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":      "reaction added",
+		"reactionType": req.ReactionType,
+	})
+}
+
+// RemoveReaction handles DELETE /v1/reports/:id/reactions/:type
+// Removes a reaction from a report (requires auth)
+func (h *ReportsHandler) RemoveReaction(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	reportID := c.Param("id")
+	reactionType := c.Param("type")
+
+	if !validation.ValidateUUID(reportID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid report ID format",
+		})
+		return
+	}
+
+	if err := h.storage.RemoveReaction(c.Request.Context(), reportID, user.Subject, reactionType); err != nil {
+		log.Printf("Failed to remove reaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "delete_failed",
+			"message": "failed to remove reaction",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "reaction removed",
+	})
+}
+
+// GetReportEngagement handles GET /v1/reports/:id/engagement
+// Gets reactions and comment count for a report (public, but user reactions require auth)
+func (h *ReportsHandler) GetReportEngagement(c *gin.Context) {
+	reportID := c.Param("id")
+	if !validation.ValidateUUID(reportID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid report ID format",
+		})
+		return
+	}
+
+	// Check for optional auth
+	userID := ""
+	if user, ok := middleware.GetUserFromContext(c); ok && user != nil {
+		userID = user.Subject
+	}
+
+	engagement, err := h.storage.GetReportEngagement(c.Request.Context(), reportID, userID)
+	if err != nil {
+		log.Printf("Failed to get engagement: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "fetch_failed",
+			"message": "failed to get engagement data",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, engagement)
+}
+
+// GetBulkEngagement handles POST /v1/reports/engagement
+// Gets engagement data for multiple reports efficiently
+func (h *ReportsHandler) GetBulkEngagement(c *gin.Context) {
+	var req struct {
+		ReportIDs []string `json:"reportIds" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Validate all report IDs
+	for _, id := range req.ReportIDs {
+		if !validation.ValidateUUID(id) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "validation_error",
+				"message": "invalid report ID format",
+			})
+			return
+		}
+	}
+
+	// Check for optional auth
+	userID := ""
+	if user, ok := middleware.GetUserFromContext(c); ok && user != nil {
+		userID = user.Subject
+	}
+
+	engagements, err := h.storage.GetBulkReportEngagement(c.Request.Context(), req.ReportIDs, userID)
+	if err != nil {
+		log.Printf("Failed to get bulk engagement: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "fetch_failed",
+			"message": "failed to get engagement data",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"engagements": engagements,
+	})
+}
+
+// ============================================================================
+// Comment Endpoints
+// ============================================================================
+
+// AddComment handles POST /v1/reports/:id/comments
+// Adds a comment to a report (requires auth)
+func (h *ReportsHandler) AddComment(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	reportID := c.Param("id")
+	if !validation.ValidateUUID(reportID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid report ID format",
+		})
+		return
+	}
+
+	var req models.AddCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Get user email from stored user info
+	storedUser, err := h.storage.GetUserByID(c.Request.Context(), user.Subject)
+	userEmail := user.Email
+	if err == nil && storedUser != nil {
+		userEmail = storedUser.Email
+	}
+
+	now := time.Now()
+	comment := &models.Comment{
+		ID:        uuid.New().String(),
+		ReportID:  reportID,
+		UserID:    user.Subject,
+		UserEmail: userEmail,
+		Content:   req.Content,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := h.storage.AddComment(c.Request.Context(), comment); err != nil {
+		log.Printf("Failed to add comment: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "create_failed",
+			"message": "failed to add comment",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, comment)
+}
+
+// GetComments handles GET /v1/reports/:id/comments
+// Gets all comments for a report (public)
+func (h *ReportsHandler) GetComments(c *gin.Context) {
+	reportID := c.Param("id")
+	if !validation.ValidateUUID(reportID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid report ID format",
+		})
+		return
+	}
+
+	comments, err := h.storage.GetComments(c.Request.Context(), reportID)
+	if err != nil {
+		log.Printf("Failed to get comments: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "fetch_failed",
+			"message": "failed to get comments",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"comments": comments,
+		"count":    len(comments),
+	})
+}
+
+// DeleteComment handles DELETE /v1/reports/:id/comments/:commentId
+// Deletes a comment (requires auth, only owner can delete)
+func (h *ReportsHandler) DeleteComment(c *gin.Context) {
+	user := middleware.RequireUser(c)
+	if user == nil {
+		return
+	}
+
+	commentID := c.Param("commentId")
+	if !validation.ValidateUUID(commentID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "invalid comment ID format",
+		})
+		return
+	}
+
+	if err := h.storage.DeleteComment(c.Request.Context(), commentID, user.Subject); err != nil {
+		if err.Error() == "comment not found or not authorized" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "not_found",
+				"message": "comment not found or not authorized to delete",
+			})
+			return
+		}
+		log.Printf("Failed to delete comment: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "delete_failed",
+			"message": "failed to delete comment",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "comment deleted",
 	})
 }

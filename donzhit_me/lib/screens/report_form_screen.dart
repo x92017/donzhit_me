@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -5,9 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:google_places_flutter/google_places_flutter.dart';
-import 'package:google_places_flutter/model/prediction.dart';
-import 'package:google_places_flutter/model/place_type.dart';
 import '../constants/dropdown_options.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
@@ -398,61 +396,21 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   }
 
   Widget _buildCityAutocomplete() {
-    final countryCode = _selectedState != null
-        ? PlacesService.getCountryCode(_selectedState!)
-        : null;
+    if (_selectedState == null) return const SizedBox.shrink();
 
-    return GooglePlaceAutoCompleteTextField(
-      textEditingController: _cityController,
-      googleAPIKey: PlacesService.apiKey,
-      inputDecoration: InputDecoration(
-        labelText: 'City (Optional)',
-        hintText: 'Search for a city',
-        prefixIcon: const Icon(Icons.location_city),
-        border: const OutlineInputBorder(),
-        suffixIcon: _cityController.text.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  setState(() {
-                    _selectedCity = null;
-                    _cityController.clear();
-                  });
-                },
-              )
-            : null,
-      ),
-      debounceTime: 400,
-      countries: countryCode != null ? [countryCode] : ['us', 'ca'],
-      isLatLngRequired: false,
-      getPlaceDetailWithLatLng: (Prediction prediction) {
-        // Extract city name from the prediction
+    return _ReportCityAutocomplete(
+      controller: _cityController,
+      selectedState: _selectedState!,
+      onCitySelected: (city) {
         setState(() {
-          _selectedCity = prediction.structuredFormatting?.mainText ??
-              prediction.description;
+          _selectedCity = city;
         });
       },
-      itemClick: (Prediction prediction) {
-        _cityController.text =
-            prediction.structuredFormatting?.mainText ?? prediction.description ?? '';
-        _cityController.selection = TextSelection.fromPosition(
-          TextPosition(offset: _cityController.text.length),
-        );
+      onCleared: () {
         setState(() {
-          _selectedCity = prediction.structuredFormatting?.mainText ??
-              prediction.description;
+          _selectedCity = null;
         });
       },
-      itemBuilder: (context, index, Prediction prediction) {
-        return ListTile(
-          leading: const Icon(Icons.location_on),
-          title: Text(prediction.structuredFormatting?.mainText ?? ''),
-          subtitle: Text(prediction.structuredFormatting?.secondaryText ?? ''),
-        );
-      },
-      seperatedBuilder: const Divider(height: 1),
-      isCrossBtnShown: false,
-      placeType: PlaceType.cities,
     );
   }
 
@@ -891,5 +849,198 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
         );
       }
     }
+  }
+}
+
+/// Custom city autocomplete widget that filters by selected state
+class _ReportCityAutocomplete extends StatefulWidget {
+  final TextEditingController controller;
+  final String selectedState;
+  final Function(String) onCitySelected;
+  final VoidCallback onCleared;
+
+  const _ReportCityAutocomplete({
+    required this.controller,
+    required this.selectedState,
+    required this.onCitySelected,
+    required this.onCleared,
+  });
+
+  @override
+  State<_ReportCityAutocomplete> createState() => _ReportCityAutocompleteState();
+}
+
+class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
+  List<CityPrediction> _predictions = [];
+  bool _isLoading = false;
+  bool _showSuggestions = false;
+  Timer? _debounceTimer;
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    _debounceTimer?.cancel();
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!_focusNode.hasFocus) {
+      _removeOverlay();
+    }
+  }
+
+  void _onTextChanged() {
+    _debounceTimer?.cancel();
+    final query = widget.controller.text;
+
+    if (query.isEmpty) {
+      setState(() {
+        _predictions = [];
+        _showSuggestions = false;
+      });
+      _removeOverlay();
+      return;
+    }
+
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      _searchCities(query);
+    });
+  }
+
+  Future<void> _searchCities(String query) async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
+    final results = await PlacesService.searchCities(query, widget.selectedState);
+
+    if (!mounted) return;
+
+    setState(() {
+      _predictions = results;
+      _isLoading = false;
+      _showSuggestions = results.isNotEmpty;
+    });
+
+    if (_showSuggestions) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final size = renderBox?.size ?? Size.zero;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 56),
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: _predictions.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final prediction = _predictions[index];
+                  return ListTile(
+                    leading: const Icon(Icons.location_on),
+                    title: Text(prediction.mainText),
+                    subtitle: Text(prediction.secondaryText),
+                    onTap: () => _selectCity(prediction),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _selectCity(CityPrediction prediction) {
+    widget.controller.text = prediction.mainText;
+    widget.controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: widget.controller.text.length),
+    );
+    widget.onCitySelected(prediction.mainText);
+    _removeOverlay();
+    setState(() {
+      _showSuggestions = false;
+      _predictions = [];
+    });
+  }
+
+  void _clearCity() {
+    widget.controller.clear();
+    widget.onCleared();
+    _removeOverlay();
+    setState(() {
+      _showSuggestions = false;
+      _predictions = [];
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextFormField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        decoration: InputDecoration(
+          labelText: 'City (Optional)',
+          hintText: 'Search for a city in ${widget.selectedState}',
+          prefixIcon: const Icon(Icons.location_city),
+          border: const OutlineInputBorder(),
+          suffixIcon: _isLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : widget.controller.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: _clearCity,
+                    )
+                  : null,
+        ),
+      ),
+    );
   }
 }

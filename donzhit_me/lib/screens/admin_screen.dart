@@ -18,6 +18,7 @@ class AdminScreen extends StatefulWidget {
 class _AdminScreenState extends State<AdminScreen> {
   final ApiService _apiService = ApiService();
   bool _isSigningIn = false;
+  String _selectedFilter = 'pending'; // 'pending', 'approved', 'rejected'
 
   @override
   void initState() {
@@ -99,7 +100,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 if (isAdmin) ...[
                   SliverToBoxAdapter(
-                    child: _buildReviewQueue(context, provider),
+                    child: _buildFilteredReports(context, provider),
                   ),
                 ] else ...[
                   SliverToBoxAdapter(
@@ -120,12 +121,13 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.only(left: 24, right: 24, top: 2, bottom: 12),
       decoration: const BoxDecoration(
         color: Colors.black,
       ),
       child: SafeArea(
         bottom: false,
+        minimum: const EdgeInsets.only(top: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -148,22 +150,13 @@ class _AdminScreenState extends State<AdminScreen> {
                 _buildAuthButton(),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
               'Manage reports and system settings',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.white.withValues(alpha: 0.9),
                   ),
             ),
-            if (_apiService.isSignedIn) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Signed in as ${_apiService.userEmail}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-              ),
-            ],
           ],
         ),
       ),
@@ -231,13 +224,17 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _StatCard(
-                  title: 'Pending Review',
-                  value: isAdmin
-                      ? provider.pendingReviewReportsAdmin.toString()
-                      : provider.pendingReviewReports.toString(),
-                  icon: Icons.hourglass_empty,
-                  color: Colors.orange,
+                child: GestureDetector(
+                  onTap: isAdmin ? () => setState(() => _selectedFilter = 'pending') : null,
+                  child: _StatCard(
+                    title: 'Pending Review',
+                    value: isAdmin
+                        ? provider.pendingReviewReportsAdmin.toString()
+                        : provider.pendingReviewReports.toString(),
+                    icon: Icons.hourglass_empty,
+                    color: Colors.orange,
+                    isSelected: isAdmin && _selectedFilter == 'pending',
+                  ),
                 ),
               ),
             ],
@@ -246,24 +243,32 @@ class _AdminScreenState extends State<AdminScreen> {
           Row(
             children: [
               Expanded(
-                child: _StatCard(
-                  title: 'Approved',
-                  value: isAdmin
-                      ? provider.approvedReportsAdmin.toString()
-                      : provider.approvedReportsCount.toString(),
-                  icon: Icons.verified,
-                  color: Colors.green,
+                child: GestureDetector(
+                  onTap: isAdmin ? () => setState(() => _selectedFilter = 'approved') : null,
+                  child: _StatCard(
+                    title: 'Approved',
+                    value: isAdmin
+                        ? provider.approvedReportsAdmin.toString()
+                        : provider.approvedReportsCount.toString(),
+                    icon: Icons.verified,
+                    color: Colors.green,
+                    isSelected: isAdmin && _selectedFilter == 'approved',
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _StatCard(
-                  title: 'Rejected',
-                  value: isAdmin
-                      ? provider.rejectedReportsAdmin.toString()
-                      : provider.rejectedReportsCount.toString(),
-                  icon: Icons.cancel,
-                  color: Colors.red,
+                child: GestureDetector(
+                  onTap: isAdmin ? () => setState(() => _selectedFilter = 'rejected') : null,
+                  child: _StatCard(
+                    title: 'Rejected',
+                    value: isAdmin
+                        ? provider.rejectedReportsAdmin.toString()
+                        : provider.rejectedReportsCount.toString(),
+                    icon: Icons.cancel,
+                    color: Colors.red,
+                    isSelected: isAdmin && _selectedFilter == 'rejected',
+                  ),
                 ),
               ),
             ],
@@ -273,8 +278,38 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  Widget _buildReviewQueue(BuildContext context, ReportProvider provider) {
-    final reviewQueue = provider.reviewQueue;
+  Widget _buildFilteredReports(BuildContext context, ReportProvider provider) {
+    // Get filtered reports based on selected filter
+    List<TrafficReport> filteredReports;
+    String title;
+    String emptyMessage;
+    Color chipColor;
+
+    switch (_selectedFilter) {
+      case 'approved':
+        filteredReports = provider.allReportsAdmin
+            .where((r) => r.status == ReportStatus.reviewedPass)
+            .toList();
+        title = 'Approved Reports';
+        emptyMessage = 'No approved reports';
+        chipColor = Colors.green;
+        break;
+      case 'rejected':
+        filteredReports = provider.allReportsAdmin
+            .where((r) => r.status == ReportStatus.reviewedFail)
+            .toList();
+        title = 'Rejected Reports';
+        emptyMessage = 'No rejected reports';
+        chipColor = Colors.red;
+        break;
+      case 'pending':
+      default:
+        filteredReports = provider.reviewQueue;
+        title = 'Pending Review';
+        emptyMessage = 'No reports awaiting review';
+        chipColor = Colors.orange;
+        break;
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -285,47 +320,43 @@ class _AdminScreenState extends State<AdminScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Review Queue',
+                title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
-              if (reviewQueue.isNotEmpty)
+              if (filteredReports.isNotEmpty)
                 Chip(
-                  label: Text('${reviewQueue.length} pending'),
-                  backgroundColor: Colors.orange.withValues(alpha: 0.2),
-                  labelStyle: const TextStyle(color: Colors.orange),
+                  label: Text('${filteredReports.length} ${_selectedFilter}'),
+                  backgroundColor: chipColor.withValues(alpha: 0.2),
+                  labelStyle: TextStyle(color: chipColor),
                 ),
             ],
           ),
           const SizedBox(height: 12),
           if (provider.isLoading)
             const Center(child: CircularProgressIndicator())
-          else if (reviewQueue.isEmpty)
+          else if (filteredReports.isEmpty)
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
                 child: Column(
                   children: [
                     Icon(
-                      Icons.check_circle_outline,
+                      _selectedFilter == 'approved'
+                          ? Icons.verified_outlined
+                          : _selectedFilter == 'rejected'
+                              ? Icons.cancel_outlined
+                              : Icons.check_circle_outline,
                       size: 64,
-                      color: Colors.green[400],
+                      color: chipColor.withValues(alpha: 0.5),
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'All caught up!',
+                      emptyMessage,
                       style: TextStyle(
                         color: Colors.grey[600],
                         fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No reports awaiting review',
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -333,11 +364,16 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
             )
           else
-            ...reviewQueue.map((report) => _ReviewQueueItem(
+            ...filteredReports.map((report) => _ReviewQueueItem(
                   report: report,
-                  onApprove: () => _showReviewDialog(context, report, approve: true),
-                  onReject: () => _showReviewDialog(context, report, approve: false),
+                  onApprove: _selectedFilter == 'pending'
+                      ? () => _showReviewDialog(context, report, approve: true)
+                      : null,
+                  onReject: _selectedFilter == 'pending'
+                      ? () => _showReviewDialog(context, report, approve: false)
+                      : null,
                   onView: () => _showReportDetailsForReview(context, report),
+                  showActions: _selectedFilter == 'pending',
                 )),
         ],
       ),
@@ -346,7 +382,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   void _showReviewDialog(BuildContext context, TrafficReport report, {required bool approve}) {
     final reasonController = TextEditingController();
-    int selectedPriority = 3; // Default to medium priority
+    final priorityController = TextEditingController(text: '100'); // Default priority
 
     showDialog(
       context: context,
@@ -367,27 +403,14 @@ class _AdminScreenState extends State<AdminScreen> {
               Text('Date: ${DateFormat('MMM d, yyyy').format(report.dateTime)}'),
               if (approve) ...[
                 const SizedBox(height: 16),
-                DropdownButtonFormField<int>(
-                  value: selectedPriority,
+                TextField(
+                  controller: priorityController,
                   decoration: const InputDecoration(
                     labelText: 'Priority',
-                    hintText: 'Select priority level',
+                    hintText: 'Higher number = higher priority',
                     border: OutlineInputBorder(),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('1 - Highest Priority')),
-                    DropdownMenuItem(value: 2, child: Text('2 - High Priority')),
-                    DropdownMenuItem(value: 3, child: Text('3 - Medium Priority')),
-                    DropdownMenuItem(value: 4, child: Text('4 - Low Priority')),
-                    DropdownMenuItem(value: 5, child: Text('5 - Lowest Priority')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setDialogState(() {
-                        selectedPriority = value;
-                      });
-                    }
-                  },
+                  keyboardType: TextInputType.number,
                 ),
               ],
               if (!approve) ...[
@@ -421,11 +444,12 @@ class _AdminScreenState extends State<AdminScreen> {
                 Navigator.pop(context);
 
                 final provider = context.read<ReportProvider>();
+                final priority = approve ? int.tryParse(priorityController.text.trim()) ?? 100 : null;
                 final success = await provider.reviewReport(
                   report.id!,
                   approve: approve,
                   reason: approve ? null : reasonController.text.trim(),
-                  priority: approve ? selectedPriority : null,
+                  priority: priority,
                 );
 
                 if (context.mounted) {
@@ -889,18 +913,26 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final bool isSelected;
 
   const _StatCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    this.isSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
+      elevation: isSelected ? 4 : 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isSelected
+            ? BorderSide(color: color, width: 2)
+            : BorderSide.none,
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1083,15 +1115,17 @@ class _ReportCard extends StatelessWidget {
 
 class _ReviewQueueItem extends StatelessWidget {
   final TrafficReport report;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
   final VoidCallback onView;
+  final bool showActions;
 
   const _ReviewQueueItem({
     required this.report,
-    required this.onApprove,
-    required this.onReject,
+    this.onApprove,
+    this.onReject,
     required this.onView,
+    this.showActions = true,
   });
 
   @override
@@ -1153,12 +1187,39 @@ class _ReviewQueueItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                Text(
-                  DateFormat('MMM d').format(report.dateTime),
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 12,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      DateFormat('MMM d').format(report.dateTime),
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (!showActions) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: report.status == ReportStatus.reviewedPass
+                              ? Colors.green.withValues(alpha: 0.2)
+                              : Colors.red.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          report.status == ReportStatus.reviewedPass ? 'Approved' : 'Rejected',
+                          style: TextStyle(
+                            color: report.status == ReportStatus.reviewedPass
+                                ? Colors.green
+                                : Colors.red,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -1216,32 +1277,34 @@ class _ReviewQueueItem extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
-                const SizedBox(width: 6),
-                OutlinedButton.icon(
-                  onPressed: onReject,
-                  icon: const Icon(Icons.close, size: 14),
-                  label: const Text('Reject', style: TextStyle(fontSize: 11)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                if (showActions) ...[
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    onPressed: onReject,
+                    icon: const Icon(Icons.close, size: 14),
+                    label: const Text('Reject', style: TextStyle(fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                ElevatedButton.icon(
-                  onPressed: onApprove,
-                  icon: const Icon(Icons.check, size: 14),
-                  label: const Text('Approve', style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  const SizedBox(width: 6),
+                  ElevatedButton.icon(
+                    onPressed: onApprove,
+                    icon: const Icon(Icons.check, size: 14),
+                    label: const Text('Approve', style: TextStyle(fontSize: 11)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ],

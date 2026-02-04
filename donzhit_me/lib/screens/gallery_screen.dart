@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
+import '../providers/settings_provider.dart';
 import '../constants/dropdown_options.dart';
 import '../services/api_service.dart';
 import '../services/places_service.dart';
@@ -45,10 +46,20 @@ class _GalleryScreenState extends State<GalleryScreen> {
     _apiService.initialize();
     // Listen for auth state changes to update UI when auto sign-in completes
     _apiService.addAuthStateListener(_onAuthStateChanged);
-    // Fetch approved reports on init
+    // Load default state from settings and fetch approved reports on init
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDefaultState();
       context.read<ReportProvider>().fetchApprovedReports();
     });
+  }
+
+  void _loadDefaultState() {
+    final settings = context.read<SettingsProvider>();
+    if (_selectedState == null && settings.defaultState.isNotEmpty) {
+      setState(() {
+        _selectedState = settings.defaultState;
+      });
+    }
   }
 
   @override

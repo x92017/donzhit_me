@@ -103,7 +103,7 @@ class _AngryCarPainter extends CustomPainter {
   }
 }
 
-/// Custom angry pedestrian icon - walking figure with angry face
+/// Custom angry face icon - just an angry face (for pedestrian reaction)
 class AngryPedestrianIcon extends StatelessWidget {
   final double size;
   final Color color;
@@ -135,48 +135,55 @@ class _AngryPedestrianPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.1
+      ..style = filled ? PaintingStyle.fill : PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.08
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-
-    final fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
 
     final w = size.width;
     final h = size.height;
 
-    // Head (larger for angry face)
-    canvas.drawCircle(Offset(w * 0.5, h * 0.18), w * 0.15, filled ? fillPaint : paint);
+    // Large centered angry face circle
+    final faceCenterX = w * 0.5;
+    final faceCenterY = h * 0.5;
+    final faceRadius = w * 0.4;
 
-    // Body
-    canvas.drawLine(Offset(w * 0.5, h * 0.33), Offset(w * 0.5, h * 0.6), paint);
-
-    // Arms (one up in angry gesture)
-    canvas.drawLine(Offset(w * 0.5, h * 0.4), Offset(w * 0.25, h * 0.35), paint); // Left arm up
-    canvas.drawLine(Offset(w * 0.5, h * 0.45), Offset(w * 0.75, h * 0.55), paint); // Right arm
-
-    // Legs (walking pose)
-    canvas.drawLine(Offset(w * 0.5, h * 0.6), Offset(w * 0.3, h * 0.95), paint);
-    canvas.drawLine(Offset(w * 0.5, h * 0.6), Offset(w * 0.7, h * 0.95), paint);
+    canvas.drawCircle(Offset(faceCenterX, faceCenterY), faceRadius, paint);
 
     // Angry face details
     final facePaint = Paint()
       ..color = filled ? Colors.white : color
+      ..style = PaintingStyle.fill;
+
+    // Left angry eye (slanted)
+    final leftEyePath = Path()
+      ..moveTo(faceCenterX - w * 0.22, faceCenterY - h * 0.08)
+      ..lineTo(faceCenterX - w * 0.06, faceCenterY - h * 0.16)
+      ..lineTo(faceCenterX - w * 0.06, faceCenterY - h * 0.02)
+      ..lineTo(faceCenterX - w * 0.22, faceCenterY - h * 0.02)
+      ..close();
+    canvas.drawPath(leftEyePath, facePaint);
+
+    // Right angry eye (slanted opposite)
+    final rightEyePath = Path()
+      ..moveTo(faceCenterX + w * 0.22, faceCenterY - h * 0.08)
+      ..lineTo(faceCenterX + w * 0.06, faceCenterY - h * 0.16)
+      ..lineTo(faceCenterX + w * 0.06, faceCenterY - h * 0.02)
+      ..lineTo(faceCenterX + w * 0.22, faceCenterY - h * 0.02)
+      ..close();
+    canvas.drawPath(rightEyePath, facePaint);
+
+    // Angry frowning mouth
+    final mouthPaint = Paint()
+      ..color = filled ? Colors.white : color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.04
+      ..strokeWidth = size.width * 0.06
       ..strokeCap = StrokeCap.round;
 
-    // Angry eyebrows
-    canvas.drawLine(Offset(w * 0.38, h * 0.14), Offset(w * 0.46, h * 0.16), facePaint);
-    canvas.drawLine(Offset(w * 0.62, h * 0.14), Offset(w * 0.54, h * 0.16), facePaint);
-
-    // Angry mouth
     final mouthPath = Path()
-      ..moveTo(w * 0.42, h * 0.24)
-      ..quadraticBezierTo(w * 0.5, h * 0.21, w * 0.58, h * 0.24);
-    canvas.drawPath(mouthPath, facePaint);
+      ..moveTo(faceCenterX - w * 0.18, faceCenterY + h * 0.2)
+      ..quadraticBezierTo(faceCenterX, faceCenterY + h * 0.1, faceCenterX + w * 0.18, faceCenterY + h * 0.2);
+    canvas.drawPath(mouthPath, mouthPaint);
   }
 
   @override

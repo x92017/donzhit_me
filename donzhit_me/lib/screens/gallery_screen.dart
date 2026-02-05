@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../providers/settings_provider.dart';
@@ -567,7 +568,9 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
   bool _isLoadingEngagement = false;
   bool _isLoadingComments = false;
   bool _showComments = false;
+  bool _showMap = false;
   final TextEditingController _commentController = TextEditingController();
+  GoogleMapController? _mapController;
 
   TrafficReport get report => widget.report;
 
@@ -580,6 +583,7 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
   @override
   void dispose() {
     _commentController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -868,6 +872,11 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
                   const Divider(height: 16),
                   // Reactions row
                   _buildReactionsRow(),
+                  // Expandable map section (only if GPS data is available)
+                  if (report.hasGpsCoordinates) ...[
+                    const SizedBox(height: 8),
+                    _buildMapExpansionTile(),
+                  ],
                   // Comments section
                   if (_showComments) ...[
                     const SizedBox(height: 8),
@@ -928,6 +937,94 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildMapExpansionTile() {
+    final coords = report.gpsCoordinates;
+    if (coords == null) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _showMap = !_showMap;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.map_outlined,
+                  size: 20,
+                  color: _showMap ? Theme.of(context).primaryColor : Colors.grey[600],
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'View Location',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _showMap ? Theme.of(context).primaryColor : Colors.grey[700],
+                    fontWeight: _showMap ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  _showMap ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.grey[600],
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Only build map when expanded (lazy loading to save API calls)
+        if (_showMap)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 200,
+            margin: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: GoogleMap(
+              key: ValueKey('map_${report.id}'),
+              initialCameraPosition: CameraPosition(
+                target: LatLng(coords.latitude, coords.longitude),
+                zoom: 15,
+              ),
+              markers: {
+                Marker(
+                  markerId: MarkerId('incident_${report.id}'),
+                  position: LatLng(coords.latitude, coords.longitude),
+                  infoWindow: InfoWindow(
+                    title: report.title,
+                    snippet: report.city.isNotEmpty
+                        ? '${report.city}, ${report.state}'
+                        : report.state,
+                  ),
+                ),
+              },
+              onMapCreated: (controller) {
+                _mapController = controller;
+                // Ensure map is centered on the marker
+                controller.animateCamera(
+                  CameraUpdate.newLatLngZoom(
+                    LatLng(coords.latitude, coords.longitude),
+                    15,
+                  ),
+                );
+              },
+              zoomControlsEnabled: true,
+              mapToolbarEnabled: false,
+              myLocationButtonEnabled: false,
+              liteModeEnabled: false,
+            ),
+          ),
       ],
     );
   }

@@ -435,3 +435,32 @@ func (f *FirestoreClient) GetComments(ctx context.Context, reportID string) ([]m
 func (f *FirestoreClient) DeleteComment(ctx context.Context, commentID, userID string) error {
 	return errors.New("comments not implemented for Firestore backend")
 }
+
+// GetCommentByID retrieves a comment by its ID (stub - not implemented for Firestore)
+func (f *FirestoreClient) GetCommentByID(ctx context.Context, commentID string) (*models.Comment, error) {
+	return nil, errors.New("comments not implemented for Firestore backend")
+}
+
+// AdjustReportPriority increments or decrements a report's priority by delta
+func (f *FirestoreClient) AdjustReportPriority(ctx context.Context, reportID string, delta int) error {
+	report, err := f.GetReport(ctx, reportID)
+	if err != nil {
+		return err
+	}
+
+	if report.Status == models.StatusDeleted {
+		return errors.New("report not found")
+	}
+
+	// Default priority to 100 if nil
+	currentPriority := 100
+	if report.Priority != nil {
+		currentPriority = *report.Priority
+	}
+	newPriority := currentPriority + delta
+	report.Priority = &newPriority
+	report.UpdatedAt = time.Now()
+
+	_, err = f.client.Collection(reportsCollection).Doc(reportID).Set(ctx, report)
+	return err
+}

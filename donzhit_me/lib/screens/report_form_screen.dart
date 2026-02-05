@@ -33,6 +33,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   final Set<String> _selectedEventTypes = {};
   String? _selectedState;
   String? _selectedCity;
+  bool _retainMediaMetadata = true;
 
   final List<XFile> _selectedMedia = [];
   bool _isSubmitting = false;
@@ -57,6 +58,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       _selectedState = draft.state;
       _selectedCity = draft.city.isNotEmpty ? draft.city : null;
       _cityController.text = draft.city;
+      _retainMediaMetadata = draft.retainMediaMetadata;
     }
   }
 
@@ -528,6 +530,28 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                // Privacy toggle for media metadata
+                SwitchListTile(
+                  title: const Text('Retain media location & date data'),
+                  subtitle: Text(
+                    _retainMediaMetadata
+                        ? 'GPS coordinates and timestamps from photos/videos will be stored'
+                        : 'GPS coordinates and timestamps will be removed for privacy',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  value: _retainMediaMetadata,
+                  onChanged: (value) {
+                    setState(() {
+                      _retainMediaMetadata = value;
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
               ],
             ),
           ),
@@ -814,6 +838,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       _selectedEventTypes.clear();
       _selectedState = null;
       _selectedCity = null;
+      _retainMediaMetadata = true;
       _selectedMedia.clear();
     });
 
@@ -830,6 +855,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       state: _selectedState ?? '',
       city: _selectedCity ?? '',
       injuries: _injuriesController.text,
+      retainMediaMetadata: _retainMediaMetadata,
       mediaFiles: _selectedMedia
           .map((f) => MediaFile(
                 name: f.name,

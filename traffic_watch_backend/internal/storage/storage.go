@@ -98,4 +98,10 @@ type Client interface {
 
 	// DeleteComment deletes a comment (only if user owns it)
 	DeleteComment(ctx context.Context, commentID, userID string) error
+
+	// GetCommentByID retrieves a comment by its ID
+	GetCommentByID(ctx context.Context, commentID string) (*models.Comment, error)
+
+	// AdjustReportPriority increments or decrements a report's priority by delta
+	AdjustReportPriority(ctx context.Context, reportID string, delta int) error
 }

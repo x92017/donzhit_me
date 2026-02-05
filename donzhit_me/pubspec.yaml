@@ -41,7 +41,7 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # Secure storage for JWT tokens
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^10.0.0
 
   # UUID generation for unique IDs
   uuid: ^4.3.3
@@ -60,6 +60,9 @@ dependencies:
 
   # Google Places API for city autocomplete
   google_places_flutter: ^2.0.8
+
+  # Google Maps for displaying incident locations
+  google_maps_flutter: ^2.5.3
 
 dev_dependencies:
   flutter_test:

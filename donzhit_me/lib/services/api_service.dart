@@ -546,6 +546,7 @@ class ApiService {
       request.fields['state'] = report.state;
       request.fields['city'] = report.city;
       request.fields['injuries'] = report.injuries;
+      request.fields['retainMediaMetadata'] = report.retainMediaMetadata.toString();
 
       // Add files with the field name expected by the backend
       for (int i = 0; i < files.length; i++) {

@@ -120,11 +120,11 @@ func (p *PostgresClient) CreateReport(ctx context.Context, report *models.Traffi
 
 	// Insert report
 	_, err = tx.Exec(ctx, `
-		INSERT INTO reports (id, user_id, title, description, date_time, road_usage, event_type, state, city, injuries, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO reports (id, user_id, title, description, date_time, road_usage, event_type, state, city, injuries, retain_media_metadata, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`, report.ID, report.UserID, report.Title, report.Description, report.DateTime,
 		report.RoadUsages, report.EventTypes, report.State, report.City, report.Injuries,
-		report.Status, report.CreatedAt, report.UpdatedAt)
+		report.RetainMediaMetadata, report.Status, report.CreatedAt, report.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert report: %w", err)
 	}
@@ -132,9 +132,9 @@ func (p *PostgresClient) CreateReport(ctx context.Context, report *models.Traffi
 	// Insert media files
 	for _, mf := range report.MediaFiles {
 		_, err = tx.Exec(ctx, `
-			INSERT INTO media_files (id, report_id, file_name, content_type, size, url, uploaded_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, mf.ID, report.ID, mf.FileName, mf.ContentType, mf.Size, mf.URL, mf.UploadedAt)
+			INSERT INTO media_files (id, report_id, file_name, content_type, size, url, uploaded_at, metadata)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, mf.ID, report.ID, mf.FileName, mf.ContentType, mf.Size, mf.URL, mf.UploadedAt, mf.Metadata)
 		if err != nil {
 			return fmt.Errorf("failed to insert media file: %w", err)
 		}
@@ -148,12 +148,12 @@ func (p *PostgresClient) GetReport(ctx context.Context, reportID string) (*model
 	report := &models.TrafficReport{}
 
 	err := p.pool.QueryRow(ctx, `
-		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, status, created_at, updated_at
+		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, COALESCE(retain_media_metadata, true), status, created_at, updated_at
 		FROM reports WHERE id = $1
 	`, reportID).Scan(
 		&report.ID, &report.UserID, &report.Title, &report.Description, &report.DateTime,
 		&report.RoadUsages, &report.EventTypes, &report.State, &report.City, &report.Injuries,
-		&report.Status, &report.CreatedAt, &report.UpdatedAt,
+		&report.RetainMediaMetadata, &report.Status, &report.CreatedAt, &report.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -164,7 +164,7 @@ func (p *PostgresClient) GetReport(ctx context.Context, reportID string) (*model
 
 	// Get media files
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, file_name, content_type, size, url, uploaded_at
+		SELECT id, file_name, content_type, size, url, uploaded_at, metadata
 		FROM media_files WHERE report_id = $1
 	`, reportID)
 	if err != nil {
@@ -174,7 +174,7 @@ func (p *PostgresClient) GetReport(ctx context.Context, reportID string) (*model
 
 	for rows.Next() {
 		var mf models.MediaFile
-		if err := rows.Scan(&mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt); err != nil {
+		if err := rows.Scan(&mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt, &mf.Metadata); err != nil {
 			return nil, fmt.Errorf("failed to scan media file: %w", err)
 		}
 		report.MediaFiles = append(report.MediaFiles, mf)
@@ -208,7 +208,7 @@ func (p *PostgresClient) GetReportByIDAndUser(ctx context.Context, reportID, use
 // ListReportsByUser retrieves all non-deleted reports for a user
 func (p *PostgresClient) ListReportsByUser(ctx context.Context, userID string) ([]models.TrafficReport, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, status, created_at, updated_at, COALESCE(review_reason, '')
+		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, COALESCE(retain_media_metadata, true), status, created_at, updated_at, COALESCE(review_reason, '')
 		FROM reports
 		WHERE user_id = $1 AND status != $2
 		ORDER BY created_at DESC
@@ -224,7 +224,7 @@ func (p *PostgresClient) ListReportsByUser(ctx context.Context, userID string) (
 		if err := rows.Scan(
 			&report.ID, &report.UserID, &report.Title, &report.Description, &report.DateTime,
 			&report.RoadUsages, &report.EventTypes, &report.State, &report.City, &report.Injuries,
-			&report.Status, &report.CreatedAt, &report.UpdatedAt, &report.ReviewReason,
+			&report.RetainMediaMetadata, &report.Status, &report.CreatedAt, &report.UpdatedAt, &report.ReviewReason,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan report: %w", err)
 		}
@@ -242,7 +242,7 @@ func (p *PostgresClient) ListReportsByUser(ctx context.Context, userID string) (
 		}
 
 		mediaRows, err := p.pool.Query(ctx, `
-			SELECT report_id, id, file_name, content_type, size, url, uploaded_at
+			SELECT report_id, id, file_name, content_type, size, url, uploaded_at, metadata
 			FROM media_files WHERE report_id = ANY($1)
 		`, reportIDs)
 		if err != nil {
@@ -253,7 +253,7 @@ func (p *PostgresClient) ListReportsByUser(ctx context.Context, userID string) (
 		for mediaRows.Next() {
 			var reportID string
 			var mf models.MediaFile
-			if err := mediaRows.Scan(&reportID, &mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt); err != nil {
+			if err := mediaRows.Scan(&reportID, &mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt, &mf.Metadata); err != nil {
 				return nil, fmt.Errorf("failed to scan media file: %w", err)
 			}
 			if r, ok := reportMap[reportID]; ok {
@@ -301,9 +301,9 @@ func (p *PostgresClient) DeleteReport(ctx context.Context, reportID, userID stri
 // AddMediaFileToReport adds a media file reference to a report
 func (p *PostgresClient) AddMediaFileToReport(ctx context.Context, reportID string, mediaFile models.MediaFile) error {
 	_, err := p.pool.Exec(ctx, `
-		INSERT INTO media_files (id, report_id, file_name, content_type, size, url, uploaded_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, mediaFile.ID, reportID, mediaFile.FileName, mediaFile.ContentType, mediaFile.Size, mediaFile.URL, mediaFile.UploadedAt)
+		INSERT INTO media_files (id, report_id, file_name, content_type, size, url, uploaded_at, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, mediaFile.ID, reportID, mediaFile.FileName, mediaFile.ContentType, mediaFile.Size, mediaFile.URL, mediaFile.UploadedAt, mediaFile.Metadata)
 	if err != nil {
 		return fmt.Errorf("failed to add media file: %w", err)
 	}
@@ -324,7 +324,7 @@ func (p *PostgresClient) AddMediaFileToReport(ctx context.Context, reportID stri
 // ListAllReports retrieves all non-deleted reports (for admin dashboard)
 func (p *PostgresClient) ListAllReports(ctx context.Context) ([]models.TrafficReport, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, status, created_at, updated_at, COALESCE(review_reason, '')
+		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, COALESCE(retain_media_metadata, true), status, created_at, updated_at, COALESCE(review_reason, '')
 		FROM reports
 		WHERE status != $1
 		ORDER BY created_at DESC
@@ -340,7 +340,7 @@ func (p *PostgresClient) ListAllReports(ctx context.Context) ([]models.TrafficRe
 // ListReportsAwaitingReview retrieves reports with "submitted" status (for admin review queue)
 func (p *PostgresClient) ListReportsAwaitingReview(ctx context.Context) ([]models.TrafficReport, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, status, created_at, updated_at, COALESCE(review_reason, '')
+		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, COALESCE(retain_media_metadata, true), status, created_at, updated_at, COALESCE(review_reason, '')
 		FROM reports
 		WHERE status = $1
 		ORDER BY created_at DESC
@@ -357,7 +357,7 @@ func (p *PostgresClient) ListReportsAwaitingReview(ctx context.Context) ([]model
 // Sorted by priority (higher number = higher priority) first, then by date descending
 func (p *PostgresClient) ListApprovedReports(ctx context.Context) ([]models.TrafficReport, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, status, created_at, updated_at, COALESCE(review_reason, ''), priority
+		SELECT id, user_id, title, description, date_time, road_usage, event_type, state, COALESCE(city, ''), injuries, COALESCE(retain_media_metadata, true), status, created_at, updated_at, COALESCE(review_reason, ''), priority
 		FROM reports
 		WHERE status = $1
 		ORDER BY COALESCE(priority, 100) DESC, created_at DESC
@@ -414,7 +414,7 @@ func (p *PostgresClient) scanReportsWithMedia(ctx context.Context, rows pgx.Rows
 		if err := rows.Scan(
 			&report.ID, &report.UserID, &report.Title, &report.Description, &report.DateTime,
 			&report.RoadUsages, &report.EventTypes, &report.State, &report.City, &report.Injuries,
-			&report.Status, &report.CreatedAt, &report.UpdatedAt, &report.ReviewReason,
+			&report.RetainMediaMetadata, &report.Status, &report.CreatedAt, &report.UpdatedAt, &report.ReviewReason,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan report: %w", err)
 		}
@@ -432,7 +432,7 @@ func (p *PostgresClient) scanReportsWithMedia(ctx context.Context, rows pgx.Rows
 		}
 
 		mediaRows, err := p.pool.Query(ctx, `
-			SELECT report_id, id, file_name, content_type, size, url, uploaded_at
+			SELECT report_id, id, file_name, content_type, size, url, uploaded_at, metadata
 			FROM media_files WHERE report_id = ANY($1)
 		`, reportIDs)
 		if err != nil {
@@ -443,7 +443,7 @@ func (p *PostgresClient) scanReportsWithMedia(ctx context.Context, rows pgx.Rows
 		for mediaRows.Next() {
 			var reportID string
 			var mf models.MediaFile
-			if err := mediaRows.Scan(&reportID, &mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt); err != nil {
+			if err := mediaRows.Scan(&reportID, &mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt, &mf.Metadata); err != nil {
 				return nil, fmt.Errorf("failed to scan media file: %w", err)
 			}
 			if r, ok := reportMap[reportID]; ok {
@@ -467,7 +467,7 @@ func (p *PostgresClient) scanReportsWithMediaAndPriority(ctx context.Context, ro
 		if err := rows.Scan(
 			&report.ID, &report.UserID, &report.Title, &report.Description, &report.DateTime,
 			&report.RoadUsages, &report.EventTypes, &report.State, &report.City, &report.Injuries,
-			&report.Status, &report.CreatedAt, &report.UpdatedAt, &report.ReviewReason, &report.Priority,
+			&report.RetainMediaMetadata, &report.Status, &report.CreatedAt, &report.UpdatedAt, &report.ReviewReason, &report.Priority,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan report: %w", err)
 		}
@@ -485,7 +485,7 @@ func (p *PostgresClient) scanReportsWithMediaAndPriority(ctx context.Context, ro
 		}
 
 		mediaRows, err := p.pool.Query(ctx, `
-			SELECT report_id, id, file_name, content_type, size, url, uploaded_at
+			SELECT report_id, id, file_name, content_type, size, url, uploaded_at, metadata
 			FROM media_files WHERE report_id = ANY($1)
 		`, reportIDs)
 		if err != nil {
@@ -496,7 +496,7 @@ func (p *PostgresClient) scanReportsWithMediaAndPriority(ctx context.Context, ro
 		for mediaRows.Next() {
 			var reportID string
 			var mf models.MediaFile
-			if err := mediaRows.Scan(&reportID, &mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt); err != nil {
+			if err := mediaRows.Scan(&reportID, &mf.ID, &mf.FileName, &mf.ContentType, &mf.Size, &mf.URL, &mf.UploadedAt, &mf.Metadata); err != nil {
 				return nil, fmt.Errorf("failed to scan media file: %w", err)
 			}
 			if r, ok := reportMap[reportID]; ok {
@@ -863,6 +863,37 @@ func (p *PostgresClient) DeleteComment(ctx context.Context, commentID, userID st
 	}
 	if result.RowsAffected() == 0 {
 		return errors.New("comment not found or not authorized")
+	}
+	return nil
+}
+
+// GetCommentByID retrieves a comment by its ID
+func (p *PostgresClient) GetCommentByID(ctx context.Context, commentID string) (*models.Comment, error) {
+	comment := &models.Comment{}
+	err := p.pool.QueryRow(ctx, `
+		SELECT id, report_id, user_id, user_email, content, created_at, updated_at
+		FROM report_comments WHERE id = $1
+	`, commentID).Scan(&comment.ID, &comment.ReportID, &comment.UserID, &comment.UserEmail,
+		&comment.Content, &comment.CreatedAt, &comment.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("comment not found")
+		}
+		return nil, fmt.Errorf("failed to get comment: %w", err)
+	}
+	return comment, nil
+}
+
+// AdjustReportPriority increments or decrements a report's priority by delta
+func (p *PostgresClient) AdjustReportPriority(ctx context.Context, reportID string, delta int) error {
+	// Use COALESCE to handle NULL priority values (default to 100)
+	_, err := p.pool.Exec(ctx, `
+		UPDATE reports
+		SET priority = COALESCE(priority, 100) + $2, updated_at = $3
+		WHERE id = $1 AND status != $4
+	`, reportID, delta, time.Now(), models.StatusDeleted)
+	if err != nil {
+		return fmt.Errorf("failed to adjust report priority: %w", err)
 	}
 	return nil
 }

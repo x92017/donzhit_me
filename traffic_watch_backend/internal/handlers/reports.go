@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"donzhit_me_backend/internal/metadata"
 	"donzhit_me_backend/internal/middleware"
 	"donzhit_me_backend/internal/models"
 	"donzhit_me_backend/internal/storage"
@@ -21,6 +24,35 @@ type ReportsHandler struct {
 	storage storage.Client
 	gcs     *storage.GCSClient
 	youtube *storage.YouTubeClient
+}
+
+// Engagement scoring constants
+// These values affect how reactions and comments impact report priority
+const (
+	ScoreThumbsUp        = 2  // +2 for thumbs up
+	ScoreThumbsDown      = -1 // -1 for thumbs down
+	ScoreAngryCar        = 3  // +3 for angry car
+	ScoreAngryPedestrian = 3  // +3 for angry pedestrian
+	ScoreAngryBicycle    = 3  // +3 for angry bicycle
+	ScoreComment         = 3  // +3 for comment
+)
+
+// getReactionScore returns the priority score delta for a reaction type
+func getReactionScore(reactionType string) int {
+	switch reactionType {
+	case models.ReactionThumbsUp:
+		return ScoreThumbsUp
+	case models.ReactionThumbsDown:
+		return ScoreThumbsDown
+	case models.ReactionAngryCar:
+		return ScoreAngryCar
+	case models.ReactionAngryPedestrian:
+		return ScoreAngryPedestrian
+	case models.ReactionAngryBicycle:
+		return ScoreAngryBicycle
+	default:
+		return 0
+	}
 }
 
 // NewReportsHandler creates a new reports handler
@@ -65,18 +97,19 @@ func (h *ReportsHandler) createReportJSON(c *gin.Context, user *models.UserInfo)
 	}
 
 	report := &models.TrafficReport{
-		ID:          uuid.New().String(),
-		UserID:      user.Subject,
-		Title:       req.Title,
-		Description: req.Description,
-		DateTime:    req.DateTime,
-		RoadUsages:  req.RoadUsages,
-		EventTypes:  req.EventTypes,
-		State:       req.State,
-		City:        req.City,
-		Injuries:    req.Injuries,
-		MediaFiles:  []models.MediaFile{},
-		Status:      models.StatusSubmitted,
+		ID:                  uuid.New().String(),
+		UserID:              user.Subject,
+		Title:               req.Title,
+		Description:         req.Description,
+		DateTime:            req.DateTime,
+		RoadUsages:          req.RoadUsages,
+		EventTypes:          req.EventTypes,
+		State:               req.State,
+		City:                req.City,
+		Injuries:            req.Injuries,
+		RetainMediaMetadata: req.RetainMediaMetadata,
+		MediaFiles:          []models.MediaFile{},
+		Status:              models.StatusSubmitted,
 	}
 
 	if err := h.storage.CreateReport(c.Request.Context(), report); err != nil {
@@ -99,6 +132,13 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	state := c.PostForm("state")
 	city := c.PostForm("city")
 	injuries := c.PostForm("injuries")
+	retainMediaMetadataStr := c.PostForm("retainMediaMetadata")
+
+	// Parse retainMediaMetadata - defaults to true if not provided
+	retainMediaMetadata := true
+	if retainMediaMetadataStr == "false" || retainMediaMetadataStr == "0" {
+		retainMediaMetadata = false
+	}
 
 	// Parse array fields - support both comma-separated and multiple form values
 	roadUsagesStr := c.PostForm("roadUsages")
@@ -224,6 +264,36 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 			}
 			safeFileName := validation.SanitizeFileName(fileHeader.Filename)
 
+			// Read file into buffer for metadata extraction and upload
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, file); err != nil {
+				file.Close()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error":   "upload_failed",
+					"message": "failed to read uploaded file",
+				})
+				return
+			}
+			file.Close()
+			fileData := buf.Bytes()
+
+			// Extract metadata from file
+			var fileMetadata map[string]interface{}
+			if metadata.IsImageContentType(contentType) {
+				fileMetadata, err = metadata.ExtractImageMetadata(bytes.NewReader(fileData))
+				if err != nil {
+					log.Printf("Failed to extract metadata from %s: %v", fileHeader.Filename, err)
+					// Continue without metadata - not a fatal error
+				} else if fileMetadata != nil {
+					log.Printf("Extracted metadata from %s: %d fields", fileHeader.Filename, len(fileMetadata))
+				}
+			} else if metadata.IsVideoContentType(contentType) {
+				fileMetadata, err = metadata.ExtractVideoMetadata(bytes.NewReader(fileData), contentType)
+				if err != nil {
+					log.Printf("Failed to extract video metadata from %s: %v", fileHeader.Filename, err)
+				}
+			}
+
 			var mediaFile models.MediaFile
 
 			// Check if it's a video and YouTube client is available
@@ -234,15 +304,12 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 				videoTitle := fmt.Sprintf("%s - %s", title, safeFileName)
 				videoDesc := fmt.Sprintf("Traffic incident report: %s\n\nUploaded via DonzHit.me", description)
 
-				result, err := h.youtube.UploadVideo(c.Request.Context(), videoTitle, videoDesc, file, contentType)
-				file.Close()
+				result, err := h.youtube.UploadVideo(c.Request.Context(), videoTitle, videoDesc, bytes.NewReader(fileData), contentType)
 
 				if err != nil {
 					log.Printf("YouTube upload failed for %s: %v, falling back to GCS", fileHeader.Filename, err)
 					// Fall back to GCS on YouTube failure
-					file, _ = fileHeader.Open()
-					mediaFile, err = h.uploadToGCS(c, user, reportID, fileID, contentType, safeFileName, fileHeader.Size, file)
-					file.Close()
+					mediaFile, err = h.uploadToGCS(c, user, reportID, fileID, contentType, safeFileName, fileHeader.Size, bytes.NewReader(fileData))
 					if err != nil {
 						return // Error response already sent
 					}
@@ -259,11 +326,30 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 				}
 			} else {
 				// Upload images (and videos if no YouTube client) to GCS
-				mediaFile, err = h.uploadToGCS(c, user, reportID, fileID, contentType, safeFileName, fileHeader.Size, file)
-				file.Close()
+				mediaFile, err = h.uploadToGCS(c, user, reportID, fileID, contentType, safeFileName, fileHeader.Size, bytes.NewReader(fileData))
 				if err != nil {
 					return // Error response already sent
 				}
+			}
+
+			// Add extracted metadata to the media file
+			if fileMetadata != nil {
+				// Strip location and date data if user opted out
+				if !retainMediaMetadata {
+					delete(fileMetadata, "gps_latitude")
+					delete(fileMetadata, "gps_longitude")
+					delete(fileMetadata, "gps_altitude")
+					delete(fileMetadata, "gps_time_stamp")
+					delete(fileMetadata, "gps_date_stamp")
+					delete(fileMetadata, "date_time_original")
+					delete(fileMetadata, "date_time_digitized")
+					delete(fileMetadata, "date_time")
+					delete(fileMetadata, "creation_time")
+					delete(fileMetadata, "g_p_s_latitude")
+					delete(fileMetadata, "g_p_s_longitude")
+					delete(fileMetadata, "g_p_s_altitude")
+				}
+				mediaFile.Metadata = fileMetadata
 			}
 
 			mediaFiles = append(mediaFiles, mediaFile)
@@ -271,18 +357,19 @@ func (h *ReportsHandler) createReportMultipart(c *gin.Context, user *models.User
 	}
 
 	report := &models.TrafficReport{
-		ID:          reportID,
-		UserID:      user.Subject,
-		Title:       title,
-		Description: description,
-		DateTime:    dateTime,
-		RoadUsages:  roadUsages,
-		EventTypes:  eventTypes,
-		State:       state,
-		City:        city,
-		Injuries:    injuries,
-		MediaFiles:  mediaFiles,
-		Status:      models.StatusSubmitted,
+		ID:                  reportID,
+		UserID:              user.Subject,
+		Title:               title,
+		Description:         description,
+		DateTime:            dateTime,
+		RoadUsages:          roadUsages,
+		EventTypes:          eventTypes,
+		State:               state,
+		City:                city,
+		Injuries:            injuries,
+		RetainMediaMetadata: retainMediaMetadata,
+		MediaFiles:          mediaFiles,
+		Status:              models.StatusSubmitted,
 	}
 
 	log.Printf("Creating report %s in storage for user %s", reportID, user.Email)
@@ -733,6 +820,15 @@ func (h *ReportsHandler) AddReaction(c *gin.Context) {
 		return
 	}
 
+	// Adjust report priority based on reaction type
+	scoreDelta := getReactionScore(req.ReactionType)
+	if scoreDelta != 0 {
+		if err := h.storage.AdjustReportPriority(c.Request.Context(), reportID, scoreDelta); err != nil {
+			log.Printf("Failed to adjust priority for report %s: %v", reportID, err)
+			// Don't fail the request, reaction was already added
+		}
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":      "reaction added",
 		"reactionType": req.ReactionType,
@@ -765,6 +861,15 @@ func (h *ReportsHandler) RemoveReaction(c *gin.Context) {
 			"message": "failed to remove reaction",
 		})
 		return
+	}
+
+	// Reverse the priority adjustment when reaction is removed
+	scoreDelta := getReactionScore(reactionType)
+	if scoreDelta != 0 {
+		if err := h.storage.AdjustReportPriority(c.Request.Context(), reportID, -scoreDelta); err != nil {
+			log.Printf("Failed to reverse priority for report %s: %v", reportID, err)
+			// Don't fail the request, reaction was already removed
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -906,6 +1011,12 @@ func (h *ReportsHandler) AddComment(c *gin.Context) {
 		return
 	}
 
+	// Adjust report priority for new comment
+	if err := h.storage.AdjustReportPriority(c.Request.Context(), reportID, ScoreComment); err != nil {
+		log.Printf("Failed to adjust priority for report %s: %v", reportID, err)
+		// Don't fail the request, comment was already added
+	}
+
 	c.JSON(http.StatusCreated, comment)
 }
 
@@ -954,6 +1065,16 @@ func (h *ReportsHandler) DeleteComment(c *gin.Context) {
 		return
 	}
 
+	// Get the comment first to know the report ID for priority adjustment
+	comment, err := h.storage.GetCommentByID(c.Request.Context(), commentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not_found",
+			"message": "comment not found",
+		})
+		return
+	}
+
 	if err := h.storage.DeleteComment(c.Request.Context(), commentID, user.Subject); err != nil {
 		if err.Error() == "comment not found or not authorized" {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -968,6 +1089,12 @@ func (h *ReportsHandler) DeleteComment(c *gin.Context) {
 			"message": "failed to delete comment",
 		})
 		return
+	}
+
+	// Reverse the priority adjustment when comment is deleted
+	if err := h.storage.AdjustReportPriority(c.Request.Context(), comment.ReportID, -ScoreComment); err != nil {
+		log.Printf("Failed to reverse priority for report %s: %v", comment.ReportID, err)
+		// Don't fail the request, comment was already deleted
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -11,6 +11,7 @@ class TrafficReport {
   final String state;
   final String city;
   final String injuries;
+  final bool retainMediaMetadata; // Whether to keep GPS/date data from media files
   final List<MediaFile> mediaFiles;
   final DateTime? createdAt;
   final ReportStatus status;
@@ -27,6 +28,7 @@ class TrafficReport {
     required this.state,
     this.city = '',
     required this.injuries,
+    this.retainMediaMetadata = true,
     this.mediaFiles = const [],
     this.createdAt,
     this.status = ReportStatus.draft,
@@ -46,6 +48,7 @@ class TrafficReport {
       'state': state,
       'city': city,
       'injuries': injuries,
+      'retainMediaMetadata': retainMediaMetadata,
       'mediaFiles': mediaFiles.map((f) => f.toJson()).toList(),
       'createdAt': createdAt?.toIso8601String(),
       'status': status.toJsonValue(),
@@ -72,6 +75,7 @@ class TrafficReport {
       state: json['state'] as String,
       city: json['city'] as String? ?? '',
       injuries: json['injuries'] as String,
+      retainMediaMetadata: json['retainMediaMetadata'] as bool? ?? true,
       mediaFiles: (json['mediaFiles'] as List<dynamic>?)
               ?.map((f) => MediaFile.fromJson(f as Map<String, dynamic>))
               .toList() ??
@@ -96,6 +100,7 @@ class TrafficReport {
     String? state,
     String? city,
     String? injuries,
+    bool? retainMediaMetadata,
     List<MediaFile>? mediaFiles,
     DateTime? createdAt,
     ReportStatus? status,
@@ -112,6 +117,7 @@ class TrafficReport {
       state: state ?? this.state,
       city: city ?? this.city,
       injuries: injuries ?? this.injuries,
+      retainMediaMetadata: retainMediaMetadata ?? this.retainMediaMetadata,
       mediaFiles: mediaFiles ?? this.mediaFiles,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
@@ -131,6 +137,22 @@ class TrafficReport {
   String toString() {
     return 'TrafficReport(id: $id, title: $title, eventTypes: $eventTypes, status: $status)';
   }
+
+  /// Get the first available GPS coordinates from media files
+  /// Returns null if no media has GPS data or retainMediaMetadata is false
+  ({double latitude, double longitude})? get gpsCoordinates {
+    if (!retainMediaMetadata) return null;
+
+    for (final media in mediaFiles) {
+      if (media.hasGpsCoordinates) {
+        return (latitude: media.gpsLatitude!, longitude: media.gpsLongitude!);
+      }
+    }
+    return null;
+  }
+
+  /// Check if this report has GPS coordinates available
+  bool get hasGpsCoordinates => gpsCoordinates != null;
 }
 
 /// Media file attachment
@@ -142,6 +164,7 @@ class MediaFile {
   final int size;
   final String? url;
   final String? contentType;
+  final Map<String, dynamic>? metadata; // EXIF/video metadata including GPS
 
   MediaFile({
     this.id,
@@ -151,7 +174,27 @@ class MediaFile {
     required this.size,
     this.url,
     this.contentType,
+    this.metadata,
   });
+
+  /// Get GPS latitude from metadata if available
+  double? get gpsLatitude {
+    if (metadata == null) return null;
+    final lat = metadata!['gps_latitude'];
+    if (lat is num) return lat.toDouble();
+    return null;
+  }
+
+  /// Get GPS longitude from metadata if available
+  double? get gpsLongitude {
+    if (metadata == null) return null;
+    final lon = metadata!['gps_longitude'];
+    if (lon is num) return lon.toDouble();
+    return null;
+  }
+
+  /// Check if this media file has GPS coordinates
+  bool get hasGpsCoordinates => gpsLatitude != null && gpsLongitude != null;
 
   Map<String, dynamic> toJson() {
     return {
@@ -160,6 +203,7 @@ class MediaFile {
       'contentType': contentType ?? (type == MediaType.video ? 'video/mp4' : 'image/jpeg'),
       'size': size,
       'url': url,
+      if (metadata != null) 'metadata': metadata,
     };
   }
 
@@ -176,6 +220,7 @@ class MediaFile {
       size: (json['size'] as num?)?.toInt() ?? 0,
       url: json['url'] as String?,
       contentType: contentType,
+      metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }
 

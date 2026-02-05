@@ -68,7 +68,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         const SizedBox(height: 2),
                         Center(
                           child: Text(
-                            'My Reports',
+                            'Your Past Posts',
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   color: Colors.white.withValues(alpha: 0.9),
                                 ),

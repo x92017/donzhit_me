@@ -37,6 +37,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   String? _selectedState;
   String? _selectedCity;
   bool _retainMediaMetadata = true;
+  String? _lastKnownDefaultState; // Track the last default state to detect changes
 
   final List<XFile> _selectedMedia = [];
   bool _isSubmitting = false;
@@ -70,6 +71,33 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     if (_selectedState == null && settings.defaultState.isNotEmpty) {
       _selectedState = settings.defaultState;
     }
+    _lastKnownDefaultState = settings.defaultState;
+  }
+
+  void _updateDefaultStateIfNeeded(SettingsProvider settings) {
+    final newDefaultState = settings.defaultState;
+
+    // Check if default state changed in settings
+    if (_lastKnownDefaultState != newDefaultState) {
+      final oldDefault = _lastKnownDefaultState;
+      _lastKnownDefaultState = newDefaultState;
+
+      // Update selected state if:
+      // 1. No state is currently selected, OR
+      // 2. The selected state was the old default (user didn't manually change it)
+      if (_selectedState == null || _selectedState == oldDefault) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedState = newDefaultState.isNotEmpty ? newDefaultState : null;
+              // Clear city when state changes
+              _selectedCity = null;
+              _cityController.clear();
+            });
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -83,6 +111,10 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch settings to update default state when it changes
+    final settings = context.watch<SettingsProvider>();
+    _updateDefaultStateIfNeeded(settings);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,

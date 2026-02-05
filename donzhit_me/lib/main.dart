@@ -243,7 +243,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const NavigationDestination(
         icon: Icon(Icons.history_outlined),
         selectedIcon: Icon(Icons.history),
-        label: 'History',
+        label: 'Posts',
       ),
       const NavigationDestination(
         icon: Icon(Icons.settings_outlined),

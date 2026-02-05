@@ -30,7 +30,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   final TextEditingController _cityController = TextEditingController();
   final ApiService _apiService = ApiService();
   bool _isSigningIn = false;
-  bool _hasInitializedDefaultState = false;
+  String? _lastKnownDefaultState; // Track the last default state to detect changes
 
   // Event type categories for filtering
   static const List<String> _categories = [
@@ -55,16 +55,29 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   void _initializeDefaultStateIfNeeded(SettingsProvider settings) {
-    // Only initialize once, and only if user hasn't manually selected a state
-    if (!_hasInitializedDefaultState && _selectedState == null && settings.defaultState.isNotEmpty) {
-      _hasInitializedDefaultState = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {
-            _selectedState = settings.defaultState;
-          });
-        }
-      });
+    final newDefaultState = settings.defaultState;
+
+    // Check if default state changed in settings
+    if (_lastKnownDefaultState != newDefaultState) {
+      final oldDefault = _lastKnownDefaultState;
+      _lastKnownDefaultState = newDefaultState;
+
+      // Update selected state if:
+      // 1. This is the first initialization and no state is selected, OR
+      // 2. The selected state was the old default (user didn't manually change it)
+      if ((_selectedState == null && newDefaultState.isNotEmpty) ||
+          (_selectedState == oldDefault && oldDefault != null)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedState = newDefaultState.isNotEmpty ? newDefaultState : null;
+              // Clear city when state changes
+              _selectedCity = null;
+              _cityController.clear();
+            });
+          }
+        });
+      }
     }
   }
 

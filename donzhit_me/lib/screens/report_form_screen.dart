@@ -998,11 +998,17 @@ class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
   }
 
   void _selectCity(CityPrediction prediction) {
-    _isSelecting = true; // Prevent _onTextChanged from triggering a new search
+    // Remove listener to prevent triggering a new search when setting text
+    widget.controller.removeListener(_onTextChanged);
+
     widget.controller.text = prediction.mainText;
     widget.controller.selection = TextSelection.fromPosition(
       TextPosition(offset: widget.controller.text.length),
     );
+
+    // Re-add listener after text is set
+    widget.controller.addListener(_onTextChanged);
+
     widget.onCitySelected(prediction.mainText);
     _removeOverlay();
     _focusNode.unfocus(); // Remove focus to dismiss keyboard

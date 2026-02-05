@@ -65,9 +65,9 @@ class PlacesService {
               final secondary = city.secondaryText.toLowerCase();
               final stateLower = stateOrProvince.toLowerCase();
               final abbrLower = stateAbbr?.toLowerCase() ?? '';
+              // More permissive check - just see if state name or abbreviation appears anywhere
               return secondary.contains(stateLower) ||
-                     secondary.contains(', $abbrLower') ||
-                     secondary.endsWith(' $abbrLower');
+                     (abbrLower.isNotEmpty && secondary.contains(abbrLower));
             })
             .toList();
       }

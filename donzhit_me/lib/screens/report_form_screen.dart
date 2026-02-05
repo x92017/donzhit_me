@@ -116,11 +116,13 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      'Report Incident',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.9),
-                          ),
+                    Center(
+                      child: Text(
+                        'Report Incident',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.9),
+                            ),
+                      ),
                     ),
                   ],
                 ),

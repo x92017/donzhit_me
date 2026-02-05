@@ -179,11 +179,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
                             ],
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            'Report pedestrian/traffic violations',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
+                          Center(
+                            child: Text(
+                              'Report pedestrian/traffic violations',
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                  ),
+                            ),
                           ),
                         ],
                       ),

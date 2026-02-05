@@ -141,6 +141,19 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 
+  // Max width for content on larger screens (web)
+  static const double _maxContentWidth = 700.0;
+
+  /// Wraps content with responsive width constraints for web
+  Widget _wrapWithMaxWidth(Widget child) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watch settings to initialize default state when settings are loaded
@@ -169,41 +182,43 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     child: SafeArea(
                       bottom: false,
                       minimum: const EdgeInsets.only(top: 2),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const DonzHitLogoHorizontal(height: 62),
-                              const Spacer(),
-                              _buildAuthButton(),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Center(
-                            child: Text(
-                              'Report pedestrian/traffic violations',
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
+                      child: _wrapWithMaxWidth(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const DonzHitLogoHorizontal(height: 62),
+                                const Spacer(),
+                                _buildAuthButton(),
+                              ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Center(
+                              child: Text(
+                                'Report pedestrian/traffic violations',
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: Colors.white.withValues(alpha: 0.9),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: _buildStateFilter(),
+                  child: _wrapWithMaxWidth(_buildStateFilter()),
                 ),
                 SliverToBoxAdapter(
-                  child: _buildCityFilter(),
+                  child: _wrapWithMaxWidth(_buildCityFilter()),
                 ),
                 SliverToBoxAdapter(
-                  child: _buildCategoryFilter(),
+                  child: _wrapWithMaxWidth(_buildCategoryFilter()),
                 ),
                 SliverToBoxAdapter(
-                  child: _buildApprovedReportsGrid(provider),
+                  child: _wrapWithMaxWidth(_buildApprovedReportsGrid(provider)),
                 ),
               ],
             ),

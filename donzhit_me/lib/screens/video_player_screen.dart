@@ -1,10 +1,13 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../models/sample_videos.dart';
+import 'web_youtube_player.dart' if (dart.library.io) 'web_youtube_player_stub.dart';
+// Conditional import for dart:io (only available on mobile/desktop)
+import 'video_player_io.dart' if (dart.library.io) 'video_player_io_real.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final String? videoPath;
@@ -77,7 +80,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Future<void> _initVideoPlayer() async {
     try {
       if (widget.videoPath != null) {
-        _videoController = VideoPlayerController.file(File(widget.videoPath!));
+        _videoController = createFileVideoController(widget.videoPath!);
+        if (_videoController == null) {
+          setState(() {
+            _error = 'Local file playback not supported on this platform';
+            _isLoading = false;
+          });
+          return;
+        }
       } else if (widget.videoUrl != null) {
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(widget.videoUrl!),
@@ -162,6 +172,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isYoutubeVideo) {
+      // Use web-specific player on web platform
+      if (kIsWeb) {
+        return WebYoutubePlayer(
+          videoId: _youtubeId,
+          title: _title,
+        );
+      }
       return _buildYoutubePlayer();
     } else {
       return _buildLocalVideoPlayer();

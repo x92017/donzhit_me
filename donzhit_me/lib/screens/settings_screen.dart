@@ -26,24 +26,28 @@ class SettingsScreen extends StatelessWidget {
           children: [
             // Black header with logo and title
             Container(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8, top: 2),
+              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 11, top: 2),
               decoration: const BoxDecoration(
                 color: Colors.black,
               ),
-              child: const SafeArea(
+              child: SafeArea(
                 bottom: false,
-                minimum: EdgeInsets.only(top: 2),
-                child: Row(
+                minimum: const EdgeInsets.only(top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DonzHitLogoHorizontal(height: 50),
-                    SizedBox(width: 12),
+                    const Row(
+                      children: [
+                        DonzHitLogoHorizontal(height: 62),
+                        Spacer(),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
                     Text(
                       'Settings',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
                     ),
                   ],
                 ),

@@ -89,36 +89,38 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
           children: [
             // Black header with logo and title
             Container(
-              padding: const EdgeInsets.only(left: 16, right: 8, bottom: 8, top: 2),
+              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 11, top: 2),
               decoration: const BoxDecoration(
                 color: Colors.black,
               ),
               child: SafeArea(
                 bottom: false,
                 minimum: const EdgeInsets.only(top: 2),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const DonzHitLogoHorizontal(height: 50),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Report Incident',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                    Row(
+                      children: [
+                        const DonzHitLogoHorizontal(height: 62),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.save_outlined, color: Colors.white),
+                          onPressed: _saveDraft,
+                          tooltip: 'Save Draft',
                         ),
-                      ),
+                        IconButton(
+                          icon: const Icon(Icons.clear_all, color: Colors.white),
+                          onPressed: _clearForm,
+                          tooltip: 'Clear Form',
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.save_outlined, color: Colors.white),
-                      onPressed: _saveDraft,
-                      tooltip: 'Save Draft',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.clear_all, color: Colors.white),
-                      onPressed: _clearForm,
-                      tooltip: 'Clear Form',
+                    const SizedBox(height: 2),
+                    Text(
+                      'Report Incident',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
                     ),
                   ],
                 ),

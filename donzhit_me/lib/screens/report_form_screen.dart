@@ -874,6 +874,7 @@ class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
   List<CityPrediction> _predictions = [];
   bool _isLoading = false;
   bool _showSuggestions = false;
+  bool _isSelecting = false; // Flag to prevent search when selecting
   Timer? _debounceTimer;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
@@ -904,6 +905,13 @@ class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
 
   void _onTextChanged() {
     _debounceTimer?.cancel();
+
+    // Skip search if we're programmatically setting text after selection
+    if (_isSelecting) {
+      _isSelecting = false;
+      return;
+    }
+
     final query = widget.controller.text;
 
     if (query.isEmpty) {
@@ -915,7 +923,7 @@ class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
       return;
     }
 
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
       _searchCities(query);
     });
   }
@@ -990,12 +998,14 @@ class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
   }
 
   void _selectCity(CityPrediction prediction) {
+    _isSelecting = true; // Prevent _onTextChanged from triggering a new search
     widget.controller.text = prediction.mainText;
     widget.controller.selection = TextSelection.fromPosition(
       TextPosition(offset: widget.controller.text.length),
     );
     widget.onCitySelected(prediction.mainText);
     _removeOverlay();
+    _focusNode.unfocus(); // Remove focus to dismiss keyboard
     setState(() {
       _showSuggestions = false;
       _predictions = [];

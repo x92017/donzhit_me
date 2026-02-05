@@ -17,6 +17,9 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen> {
+  // Max width for content on larger screens (web)
+  static const double _maxContentWidth = 700.0;
+
   final ApiService _apiService = ApiService();
   bool _isSigningIn = false;
   String _selectedFilter = 'pending'; // 'pending', 'approved', 'rejected'
@@ -97,18 +100,38 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: _buildHeader(context),
                 ),
                 SliverToBoxAdapter(
-                  child: _buildStatistics(context, provider),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                      child: _buildStatistics(context, provider),
+                    ),
+                  ),
                 ),
                 if (isAdmin) ...[
                   SliverToBoxAdapter(
-                    child: _buildFilteredReports(context, provider),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                        child: _buildFilteredReports(context, provider),
+                      ),
+                    ),
                   ),
                 ] else ...[
                   SliverToBoxAdapter(
-                    child: _buildQuickActions(context),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                        child: _buildQuickActions(context),
+                      ),
+                    ),
                   ),
                   SliverToBoxAdapter(
-                    child: _buildRecentReports(context, provider),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                        child: _buildRecentReports(context, provider),
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -129,26 +152,31 @@ class _AdminScreenState extends State<AdminScreen> {
       child: SafeArea(
         bottom: false,
         minimum: const EdgeInsets.only(top: 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const DonzHitLogoHorizontal(height: 62),
-                const Spacer(),
-                _buildAuthButton(),
+                Row(
+                  children: [
+                    const DonzHitLogoHorizontal(height: 62),
+                    const Spacer(),
+                    _buildAuthButton(),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Center(
+                  child: Text(
+                    'Admin Dashboard',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 2),
-            Center(
-              child: Text(
-                'Admin Dashboard',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.9),
-                    ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

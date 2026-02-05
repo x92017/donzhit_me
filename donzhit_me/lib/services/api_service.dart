@@ -255,6 +255,7 @@ class ApiService {
       final authClient = user.authorizationClient;
       if (kDebugMode) {
         print('Caching token from user during sign-in...');
+        print('User email: ${user.email}');
       }
 
       // Request email and profile scopes
@@ -263,7 +264,7 @@ class ApiService {
       // First check if we already have authorization
       var authorization = await authClient.authorizationForScopes(scopes);
 
-      // If not, request authorization
+      // If not found, request authorization (this may show a popup on web)
       if (authorization == null) {
         if (kDebugMode) {
           print('No existing authorization, requesting new authorization...');
@@ -271,12 +272,18 @@ class ApiService {
         authorization = await authClient.authorizeScopes(scopes);
       }
 
-      _cachedToken = authorization.accessToken;
-      _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
-      if (kDebugMode) {
-        print('Access token cached: ${_cachedToken?.substring(0, 20)}...');
+      if (authorization != null) {
+        _cachedToken = authorization.accessToken;
+        _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
+        if (kDebugMode) {
+          print('Access token cached: ${_cachedToken?.substring(0, 20)}...');
+        }
+      } else {
+        if (kDebugMode) {
+          print('No access token available');
+        }
       }
-        } catch (e) {
+    } catch (e) {
       if (kDebugMode) {
         print('Error caching token during sign-in: $e');
       }

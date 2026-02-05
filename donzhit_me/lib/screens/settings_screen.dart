@@ -11,6 +11,9 @@ import '../widgets/donzhit_logo.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
+  // Max width for content on larger screens (web)
+  static const double _maxContentWidth = 700.0;
+
   @override
   Widget build(BuildContext context) {
     final apiService = ApiService();
@@ -33,31 +36,39 @@ class SettingsScreen extends StatelessWidget {
               child: SafeArea(
                 bottom: false,
                 minimum: const EdgeInsets.only(top: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        DonzHitLogoHorizontal(height: 62),
-                        Spacer(),
+                        const Row(
+                          children: [
+                            DonzHitLogoHorizontal(height: 62),
+                            Spacer(),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Center(
+                          child: Text(
+                            'Settings',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Center(
-                      child: Text(
-                        'Settings',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
             // Content
             Expanded(
-              child: Consumer<SettingsProvider>(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                  child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -229,6 +240,8 @@ class SettingsScreen extends StatelessWidget {
             ],
           );
         },
+                  ),
+                ),
               ),
             ),
           ],

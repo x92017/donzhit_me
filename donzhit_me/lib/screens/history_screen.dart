@@ -16,6 +16,9 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  // Max width for content on larger screens (web)
+  static const double _maxContentWidth = 700.0;
+
   String _searchQuery = '';
   ReportStatus? _filterStatus;
   String? _filterEventType;
@@ -40,41 +43,49 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: SafeArea(
                 bottom: false,
                 minimum: const EdgeInsets.only(top: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const DonzHitLogoHorizontal(height: 62),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.filter_list, color: Colors.white),
-                          onPressed: _showFilterDialog,
-                          tooltip: 'Filter',
+                        Row(
+                          children: [
+                            const DonzHitLogoHorizontal(height: 62),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.filter_list, color: Colors.white),
+                              onPressed: _showFilterDialog,
+                              tooltip: 'Filter',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.refresh, color: Colors.white),
+                              onPressed: () => context.read<ReportProvider>().fetchReports(),
+                              tooltip: 'Refresh',
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.refresh, color: Colors.white),
-                          onPressed: () => context.read<ReportProvider>().fetchReports(),
-                          tooltip: 'Refresh',
+                        const SizedBox(height: 2),
+                        Center(
+                          child: Text(
+                            'My Reports',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Center(
-                      child: Text(
-                        'My Reports',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
             // Content
             Expanded(
-              child: Consumer<ReportProvider>(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                  child: Consumer<ReportProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
             return const Center(child: CircularProgressIndicator());
@@ -167,6 +178,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ],
           );
         },
+                  ),
+                ),
               ),
             ),
           ],

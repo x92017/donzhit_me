@@ -22,6 +22,9 @@ class ReportFormScreen extends StatefulWidget {
 }
 
 class _ReportFormScreenState extends State<ReportFormScreen> {
+  // Max width for content on larger screens (web)
+  static const double _maxContentWidth = 700.0;
+
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -98,106 +101,116 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
               child: SafeArea(
                 bottom: false,
                 minimum: const EdgeInsets.only(top: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const DonzHitLogoHorizontal(height: 62),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.save_outlined, color: Colors.white),
-                          onPressed: _saveDraft,
-                          tooltip: 'Save Draft',
+                        Row(
+                          children: [
+                            const DonzHitLogoHorizontal(height: 62),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.save_outlined, color: Colors.white),
+                              onPressed: _saveDraft,
+                              tooltip: 'Save Draft',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.clear_all, color: Colors.white),
+                              onPressed: _clearForm,
+                              tooltip: 'Clear Form',
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.clear_all, color: Colors.white),
-                          onPressed: _clearForm,
-                          tooltip: 'Clear Form',
+                        const SizedBox(height: 2),
+                        Center(
+                          child: Text(
+                            'Report Incident',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Center(
-                      child: Text(
-                        'Report Incident',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
             // Form content
             Expanded(
-              child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header Card
-              _buildHeaderCard(),
-              const SizedBox(height: 24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+                  child: Form(
+                    key: _formKey,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Header Card
+                          _buildHeaderCard(),
+                          const SizedBox(height: 24),
 
-              // Title Field
-              _buildSectionTitle('Incident Details'),
-              const SizedBox(height: 12),
-              _buildTitleField(),
-              const SizedBox(height: 16),
+                          // Title Field
+                          _buildSectionTitle('Incident Details'),
+                          const SizedBox(height: 12),
+                          _buildTitleField(),
+                          const SizedBox(height: 16),
 
-              // Description Field
-              _buildDescriptionField(),
-              const SizedBox(height: 16),
+                          // Description Field
+                          _buildDescriptionField(),
+                          const SizedBox(height: 16),
 
-              // Date/Time Field
-              _buildDateTimeField(),
-              const SizedBox(height: 24),
+                          // Date/Time Field
+                          _buildDateTimeField(),
+                          const SizedBox(height: 24),
 
-              // Classification Section
-              _buildSectionTitle('Classification'),
-              const SizedBox(height: 12),
+                          // Classification Section
+                          _buildSectionTitle('Classification'),
+                          const SizedBox(height: 12),
 
-              // Road Usage Multi-Select
-              _buildRoadUsageSelector(),
-              const SizedBox(height: 16),
+                          // Road Usage Multi-Select
+                          _buildRoadUsageSelector(),
+                          const SizedBox(height: 16),
 
-              // Event Type Multi-Select
-              _buildEventTypeSelector(),
-              const SizedBox(height: 16),
+                          // Event Type Multi-Select
+                          _buildEventTypeSelector(),
+                          const SizedBox(height: 16),
 
-              // State Dropdown
-              _buildStateDropdown(),
-              const SizedBox(height: 16),
+                          // State Dropdown
+                          _buildStateDropdown(),
+                          const SizedBox(height: 16),
 
-              // City Autocomplete (only shows when state is selected)
-              if (_selectedState != null) _buildCityAutocomplete(),
-              if (_selectedState != null) const SizedBox(height: 24),
-              if (_selectedState == null) const SizedBox(height: 8),
+                          // City Autocomplete (only shows when state is selected)
+                          if (_selectedState != null) _buildCityAutocomplete(),
+                          if (_selectedState != null) const SizedBox(height: 24),
+                          if (_selectedState == null) const SizedBox(height: 8),
 
-              // Additional Info Section
-              _buildSectionTitle('Additional Information'),
-              const SizedBox(height: 12),
+                          // Additional Info Section
+                          _buildSectionTitle('Additional Information'),
+                          const SizedBox(height: 12),
 
-              // Injuries Field
-              _buildInjuriesField(),
-              const SizedBox(height: 24),
+                          // Injuries Field
+                          _buildInjuriesField(),
+                          const SizedBox(height: 24),
 
-              // Media Upload Section
-              _buildSectionTitle('Upload Media'),
-              const SizedBox(height: 12),
-              _buildMediaUpload(),
-              const SizedBox(height: 32),
+                          // Media Upload Section
+                          _buildSectionTitle('Upload Media'),
+                          const SizedBox(height: 12),
+                          _buildMediaUpload(),
+                          const SizedBox(height: 32),
 
-              // Submit Button
-              _buildSubmitButton(),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
+                          // Submit Button
+                          _buildSubmitButton(),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

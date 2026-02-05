@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../providers/report_provider.dart';
 import '../models/traffic_report.dart';
 import '../services/api_service.dart';
+import '../widgets/donzhit_logo.dart';
 import 'video_player_screen.dart';
 import 'image_viewer_screen.dart';
 
@@ -121,42 +122,28 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: 24, right: 24, top: 2, bottom: 12),
+      padding: const EdgeInsets.only(left: 16, right: 8, top: 2, bottom: 8),
       decoration: const BoxDecoration(
         color: Colors.black,
       ),
       child: SafeArea(
         bottom: false,
         minimum: const EdgeInsets.only(top: 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.admin_panel_settings,
+            const DonzHitLogoHorizontal(height: 50),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Admin Dashboard',
+                style: TextStyle(
                   color: Colors.white,
-                  size: 40,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Admin Dashboard',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const Spacer(),
-                _buildAuthButton(),
-              ],
+              ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Manage reports and system settings',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-            ),
+            _buildAuthButton(),
           ],
         ),
       ),

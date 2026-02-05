@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +12,7 @@ import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/places_service.dart';
+import '../widgets/donzhit_logo.dart';
 
 class ReportFormScreen extends StatefulWidget {
   const ReportFormScreen({super.key});
@@ -76,23 +78,55 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Report Incident'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save_outlined),
-            onPressed: _saveDraft,
-            tooltip: 'Save Draft',
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear_all),
-            onPressed: _clearForm,
-            tooltip: 'Clear Form',
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
-      body: Form(
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Black header with logo and title
+            Container(
+              padding: const EdgeInsets.only(left: 16, right: 8, bottom: 8, top: 2),
+              decoration: const BoxDecoration(
+                color: Colors.black,
+              ),
+              child: SafeArea(
+                bottom: false,
+                minimum: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    const DonzHitLogoHorizontal(height: 50),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Report Incident',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.save_outlined, color: Colors.white),
+                      onPressed: _saveDraft,
+                      tooltip: 'Save Draft',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.clear_all, color: Colors.white),
+                      onPressed: _clearForm,
+                      tooltip: 'Clear Form',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Form content
+            Expanded(
+              child: Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -157,6 +191,10 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
               const SizedBox(height: 16),
             ],
           ),
+        ),
+              ),
+            ),
+          ],
         ),
       ),
     );

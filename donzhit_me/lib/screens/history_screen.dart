@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
+import '../widgets/donzhit_logo.dart';
 import 'video_player_screen.dart';
 import 'image_viewer_screen.dart';
 
@@ -20,23 +22,55 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Reports'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-            tooltip: 'Filter',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<ReportProvider>().fetchReports(),
-            tooltip: 'Refresh',
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
-      body: Consumer<ReportProvider>(
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Black header with logo and title
+            Container(
+              padding: const EdgeInsets.only(left: 16, right: 8, bottom: 8, top: 2),
+              decoration: const BoxDecoration(
+                color: Colors.black,
+              ),
+              child: SafeArea(
+                bottom: false,
+                minimum: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    const DonzHitLogoHorizontal(height: 50),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'My Reports',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.filter_list, color: Colors.white),
+                      onPressed: _showFilterDialog,
+                      tooltip: 'Filter',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      onPressed: () => context.read<ReportProvider>().fetchReports(),
+                      tooltip: 'Refresh',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Content
+            Expanded(
+              child: Consumer<ReportProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
             return const Center(child: CircularProgressIndicator());
@@ -129,6 +163,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ],
           );
         },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

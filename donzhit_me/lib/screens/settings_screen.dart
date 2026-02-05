@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../constants/dropdown_options.dart';
 import '../providers/settings_provider.dart';
@@ -14,11 +15,43 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final apiService = ApiService();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
-      body: Consumer<SettingsProvider>(
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Black header with logo and title
+            Container(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8, top: 2),
+              decoration: const BoxDecoration(
+                color: Colors.black,
+              ),
+              child: const SafeArea(
+                bottom: false,
+                minimum: EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    DonzHitLogoHorizontal(height: 50),
+                    SizedBox(width: 12),
+                    Text(
+                      'Settings',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Content
+            Expanded(
+              child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -190,6 +223,10 @@ class SettingsScreen extends StatelessWidget {
             ],
           );
         },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

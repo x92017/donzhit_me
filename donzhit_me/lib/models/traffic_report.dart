@@ -196,6 +196,49 @@ class MediaFile {
   /// Check if this media file has GPS coordinates
   bool get hasGpsCoordinates => gpsLatitude != null && gpsLongitude != null;
 
+  /// Get creation time from metadata if available
+  /// Checks multiple possible fields: creation_time, date_time_original, date_time_digitized, date_time
+  DateTime? get creationTime {
+    if (metadata == null) return null;
+
+    // Try different metadata fields in order of preference
+    final fields = ['creation_time', 'date_time_original', 'date_time_digitized', 'date_time'];
+    for (final field in fields) {
+      final value = metadata![field];
+      if (value != null) {
+        final parsed = _parseDateTime(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  /// Parse various date time formats from metadata
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      // Try ISO 8601 format first
+      final iso = DateTime.tryParse(value);
+      if (iso != null) return iso;
+
+      // Try EXIF format: "2024:01:15 10:30:45"
+      final exifPattern = RegExp(r'(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})');
+      final match = exifPattern.firstMatch(value);
+      if (match != null) {
+        return DateTime(
+          int.parse(match.group(1)!),
+          int.parse(match.group(2)!),
+          int.parse(match.group(3)!),
+          int.parse(match.group(4)!),
+          int.parse(match.group(5)!),
+          int.parse(match.group(6)!),
+        );
+      }
+    }
+    return null;
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

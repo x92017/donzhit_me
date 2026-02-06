@@ -242,7 +242,7 @@ func (f *FirestoreClient) ListApprovedReports(ctx context.Context) ([]models.Tra
 }
 
 // UpdateReportStatus updates a report's status and optional review reason
-func (f *FirestoreClient) UpdateReportStatus(ctx context.Context, reportID, status, reviewReason string) error {
+func (f *FirestoreClient) UpdateReportStatus(ctx context.Context, reportID, status, reviewReason, reviewedBy string) error {
 	report, err := f.GetReport(ctx, reportID)
 	if err != nil {
 		return err
@@ -255,13 +255,19 @@ func (f *FirestoreClient) UpdateReportStatus(ctx context.Context, reportID, stat
 	report.Status = status
 	report.ReviewReason = reviewReason
 	report.UpdatedAt = time.Now()
+	// Append reviewedBy to existing value
+	if report.ReviewedBy == "" {
+		report.ReviewedBy = reviewedBy
+	} else {
+		report.ReviewedBy = report.ReviewedBy + "," + reviewedBy
+	}
 
 	_, err = f.client.Collection(reportsCollection).Doc(reportID).Set(ctx, report)
 	return err
 }
 
 // UpdateReportStatusWithPriority updates a report's status, review reason, and priority
-func (f *FirestoreClient) UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int) error {
+func (f *FirestoreClient) UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int, reviewedBy string) error {
 	report, err := f.GetReport(ctx, reportID)
 	if err != nil {
 		return err
@@ -275,6 +281,12 @@ func (f *FirestoreClient) UpdateReportStatusWithPriority(ctx context.Context, re
 	report.ReviewReason = reviewReason
 	report.Priority = priority
 	report.UpdatedAt = time.Now()
+	// Append reviewedBy to existing value
+	if report.ReviewedBy == "" {
+		report.ReviewedBy = reviewedBy
+	} else {
+		report.ReviewedBy = report.ReviewedBy + "," + reviewedBy
+	}
 
 	_, err = f.client.Collection(reportsCollection).Doc(reportID).Set(ctx, report)
 	return err
@@ -381,6 +393,11 @@ func (f *FirestoreClient) AddReaction(ctx context.Context, reaction *models.Reac
 // RemoveReaction removes a reaction from a report (stub - not implemented for Firestore)
 func (f *FirestoreClient) RemoveReaction(ctx context.Context, reportID, userID, reactionType string) error {
 	return errors.New("reactions not implemented for Firestore backend")
+}
+
+// GetUserReactionType gets the current reaction type for a user on a report (stub)
+func (f *FirestoreClient) GetUserReactionType(ctx context.Context, reportID, userID string) (string, error) {
+	return "", errors.New("reactions not implemented for Firestore backend")
 }
 
 // GetReactionCounts gets the count of each reaction type for a report (stub)

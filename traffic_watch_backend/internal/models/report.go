@@ -33,6 +33,7 @@ type TrafficReport struct {
 	UpdatedAt           time.Time   `json:"updatedAt" firestore:"updatedAt"`
 	Status              string      `json:"status" firestore:"status"`
 	ReviewReason        string      `json:"reviewReason,omitempty" firestore:"review_reason"`
+	ReviewedBy          string      `json:"reviewedBy,omitempty" firestore:"reviewed_by"`
 	Priority            *int        `json:"priority,omitempty" firestore:"priority"`
 }
 
@@ -80,12 +81,14 @@ const (
 
 // Reaction represents a user reaction to a report
 type Reaction struct {
-	ID           string    `json:"id"`
-	ReportID     string    `json:"reportId"`
-	UserID       string    `json:"userId"`
-	UserEmail    string    `json:"userEmail"`
-	ReactionType string    `json:"reactionType"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ID                  string     `json:"id"`
+	ReportID            string     `json:"reportId"`
+	UserID              string     `json:"userId"`
+	UserEmail           string     `json:"userEmail"`
+	ReactionType        string     `json:"reactionType"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	ModifiedAt          *time.Time `json:"modifiedAt,omitempty"`
+	HistoryReactionType string     `json:"historyReactionType,omitempty"`
 }
 
 // Comment represents a user comment on a report

@@ -719,9 +719,9 @@ func (h *ReportsHandler) ReviewReport(c *gin.Context) {
 	// Use UpdateReportStatusWithPriority when approving with priority
 	var err error
 	if req.Status == models.StatusReviewedPass && req.Priority != nil {
-		err = h.storage.UpdateReportStatusWithPriority(c.Request.Context(), reportID, req.Status, req.Reason, req.Priority)
+		err = h.storage.UpdateReportStatusWithPriority(c.Request.Context(), reportID, req.Status, req.Reason, req.Priority, user.Email)
 	} else {
-		err = h.storage.UpdateReportStatus(c.Request.Context(), reportID, req.Status, req.Reason)
+		err = h.storage.UpdateReportStatus(c.Request.Context(), reportID, req.Status, req.Reason, user.Email)
 	}
 
 	if err != nil {
@@ -754,7 +754,7 @@ func (h *ReportsHandler) ReviewReport(c *gin.Context) {
 // ============================================================================
 
 // AddReaction handles POST /v1/reports/:id/reactions
-// Adds a reaction to a report (requires auth)
+// Adds or updates a reaction to a report (requires auth)
 func (h *ReportsHandler) AddReaction(c *gin.Context) {
 	user := middleware.RequireUser(c)
 	if user == nil {
@@ -795,6 +795,9 @@ func (h *ReportsHandler) AddReaction(c *gin.Context) {
 		return
 	}
 
+	// Get existing reaction type (if any) for priority adjustment
+	existingReactionType, _ := h.storage.GetUserReactionType(c.Request.Context(), reportID, user.Subject)
+
 	// Get user email from stored user info
 	storedUser, err := h.storage.GetUserByID(c.Request.Context(), user.Subject)
 	userEmail := user.Email
@@ -820,8 +823,11 @@ func (h *ReportsHandler) AddReaction(c *gin.Context) {
 		return
 	}
 
-	// Adjust report priority based on reaction type
-	scoreDelta := getReactionScore(req.ReactionType)
+	// Adjust report priority based on reaction change
+	// Remove old reaction score (if any) and add new reaction score
+	oldScore := getReactionScore(existingReactionType)
+	newScore := getReactionScore(req.ReactionType)
+	scoreDelta := newScore - oldScore
 	if scoreDelta != 0 {
 		if err := h.storage.AdjustReportPriority(c.Request.Context(), reportID, scoreDelta); err != nil {
 			log.Printf("Failed to adjust priority for report %s: %v", reportID, err)
@@ -854,6 +860,16 @@ func (h *ReportsHandler) RemoveReaction(c *gin.Context) {
 		return
 	}
 
+	// Get the current reaction type for priority adjustment
+	currentReactionType, _ := h.storage.GetUserReactionType(c.Request.Context(), reportID, user.Subject)
+	if currentReactionType == "" {
+		// No reaction exists, nothing to remove
+		c.JSON(http.StatusOK, gin.H{
+			"message": "no reaction to remove",
+		})
+		return
+	}
+
 	if err := h.storage.RemoveReaction(c.Request.Context(), reportID, user.Subject, reactionType); err != nil {
 		log.Printf("Failed to remove reaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -864,7 +880,7 @@ func (h *ReportsHandler) RemoveReaction(c *gin.Context) {
 	}
 
 	// Reverse the priority adjustment when reaction is removed
-	scoreDelta := getReactionScore(reactionType)
+	scoreDelta := getReactionScore(currentReactionType)
 	if scoreDelta != 0 {
 		if err := h.storage.AdjustReportPriority(c.Request.Context(), reportID, -scoreDelta); err != nil {
 			log.Printf("Failed to reverse priority for report %s: %v", reportID, err)

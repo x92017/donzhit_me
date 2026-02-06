@@ -43,10 +43,10 @@ type Client interface {
 	ListApprovedReports(ctx context.Context) ([]models.TrafficReport, error)
 
 	// UpdateReportStatus updates a report's status and optional review reason
-	UpdateReportStatus(ctx context.Context, reportID, status, reviewReason string) error
+	UpdateReportStatus(ctx context.Context, reportID, status, reviewReason, reviewedBy string) error
 
 	// UpdateReportStatusWithPriority updates a report's status, review reason, and priority
-	UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int) error
+	UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int, reviewedBy string) error
 
 	// User management methods
 
@@ -70,11 +70,14 @@ type Client interface {
 
 	// Reaction methods
 
-	// AddReaction adds a reaction to a report
+	// AddReaction adds or updates a reaction to a report (upsert)
 	AddReaction(ctx context.Context, reaction *models.Reaction) error
 
 	// RemoveReaction removes a reaction from a report
 	RemoveReaction(ctx context.Context, reportID, userID, reactionType string) error
+
+	// GetUserReactionType gets the current reaction type for a user on a report
+	GetUserReactionType(ctx context.Context, reportID, userID string) (string, error)
 
 	// GetReactionCounts gets the count of each reaction type for a report
 	GetReactionCounts(ctx context.Context, reportID string) ([]models.ReactionCount, error)

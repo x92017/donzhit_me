@@ -371,12 +371,16 @@ func (p *PostgresClient) ListApprovedReports(ctx context.Context) ([]models.Traf
 }
 
 // UpdateReportStatus updates a report's status and optional review reason
-func (p *PostgresClient) UpdateReportStatus(ctx context.Context, reportID, status, reviewReason string) error {
+func (p *PostgresClient) UpdateReportStatus(ctx context.Context, reportID, status, reviewReason, reviewedBy string) error {
 	result, err := p.pool.Exec(ctx, `
 		UPDATE reports
-		SET status = $2, review_reason = $3, updated_at = $4
-		WHERE id = $1 AND status != $5
-	`, reportID, status, reviewReason, time.Now(), models.StatusDeleted)
+		SET status = $2, review_reason = $3, updated_at = $4,
+			reviewed_by = CASE
+				WHEN COALESCE(reviewed_by, '') = '' THEN $5
+				ELSE reviewed_by || ',' || $5
+			END
+		WHERE id = $1 AND status != $6
+	`, reportID, status, reviewReason, time.Now(), reviewedBy, models.StatusDeleted)
 	if err != nil {
 		return fmt.Errorf("failed to update report status: %w", err)
 	}
@@ -389,12 +393,16 @@ func (p *PostgresClient) UpdateReportStatus(ctx context.Context, reportID, statu
 }
 
 // UpdateReportStatusWithPriority updates a report's status, review reason, and priority
-func (p *PostgresClient) UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int) error {
+func (p *PostgresClient) UpdateReportStatusWithPriority(ctx context.Context, reportID, status, reviewReason string, priority *int, reviewedBy string) error {
 	result, err := p.pool.Exec(ctx, `
 		UPDATE reports
-		SET status = $2, review_reason = $3, priority = $4, updated_at = $5
-		WHERE id = $1 AND status != $6
-	`, reportID, status, reviewReason, priority, time.Now(), models.StatusDeleted)
+		SET status = $2, review_reason = $3, priority = $4, updated_at = $5,
+			reviewed_by = CASE
+				WHEN COALESCE(reviewed_by, '') = '' THEN $6
+				ELSE reviewed_by || ',' || $6
+			END
+		WHERE id = $1 AND status != $7
+	`, reportID, status, reviewReason, priority, time.Now(), reviewedBy, models.StatusDeleted)
 	if err != nil {
 		return fmt.Errorf("failed to update report status with priority: %w", err)
 	}
@@ -606,12 +614,21 @@ func (p *PostgresClient) RevokeUserToken(ctx context.Context, userID string) err
 // Reaction Methods
 // ============================================================================
 
-// AddReaction adds a reaction to a report
+// AddReaction adds or updates a reaction to a report
+// If user already has a reaction on this report, it updates the reaction type,
+// preserves created_at, sets modified_at, and appends old type to history
 func (p *PostgresClient) AddReaction(ctx context.Context, reaction *models.Reaction) error {
 	_, err := p.pool.Exec(ctx, `
-		INSERT INTO report_reactions (id, report_id, user_id, user_email, reaction_type, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (report_id, user_id, reaction_type) DO NOTHING
+		INSERT INTO report_reactions (id, report_id, user_id, user_email, reaction_type, created_at, modified_at, history_reaction_type)
+		VALUES ($1, $2, $3, $4, $5, $6, NULL, '')
+		ON CONFLICT (report_id, user_id) DO UPDATE SET
+			reaction_type = $5,
+			modified_at = NOW(),
+			history_reaction_type = CASE
+				WHEN report_reactions.history_reaction_type = '' THEN report_reactions.reaction_type
+				ELSE report_reactions.history_reaction_type || ',' || report_reactions.reaction_type
+			END
+		WHERE report_reactions.reaction_type != $5
 	`, reaction.ID, reaction.ReportID, reaction.UserID, reaction.UserEmail, reaction.ReactionType, reaction.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to add reaction: %w", err)
@@ -622,12 +639,27 @@ func (p *PostgresClient) AddReaction(ctx context.Context, reaction *models.React
 // RemoveReaction removes a reaction from a report
 func (p *PostgresClient) RemoveReaction(ctx context.Context, reportID, userID, reactionType string) error {
 	_, err := p.pool.Exec(ctx, `
-		DELETE FROM report_reactions WHERE report_id = $1 AND user_id = $2 AND reaction_type = $3
-	`, reportID, userID, reactionType)
+		DELETE FROM report_reactions WHERE report_id = $1 AND user_id = $2
+	`, reportID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to remove reaction: %w", err)
 	}
 	return nil
+}
+
+// GetUserReactionType gets the current reaction type for a user on a report
+func (p *PostgresClient) GetUserReactionType(ctx context.Context, reportID, userID string) (string, error) {
+	var reactionType string
+	err := p.pool.QueryRow(ctx, `
+		SELECT reaction_type FROM report_reactions WHERE report_id = $1 AND user_id = $2
+	`, reportID, userID).Scan(&reactionType)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to get user reaction type: %w", err)
+	}
+	return reactionType, nil
 }
 
 // GetReactionCounts gets the count of each reaction type for a report

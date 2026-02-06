@@ -637,6 +637,17 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
 
   TrafficReport get report => widget.report;
 
+  /// Get media creation time from the first media file's metadata
+  DateTime? _getMediaCreationTime() {
+    if (report.mediaFiles.isEmpty) return null;
+    // Check each media file for creation time
+    for (final mediaFile in report.mediaFiles) {
+      final creationTime = mediaFile.creationTime;
+      if (creationTime != null) return creationTime;
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -719,7 +730,7 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
         }
       }
     } else {
-      // Clicking a different reaction - remove existing first, then add new
+      // Clicking a different reaction - backend handles upsert with history tracking
       // Optimistic update
       setState(() {
         final newCounts = Map<ReactionType, int>.from(_engagement!.reactionCounts);
@@ -741,12 +752,7 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
         );
       });
 
-      // Remove existing reaction first if any
-      if (existingReaction != null) {
-        await widget.apiService.removeReaction(report.id!, existingReaction);
-      }
-
-      // Add new reaction
+      // Add/update reaction - backend handles upsert and keeps history
       final response = await widget.apiService.addReaction(report.id!, type);
       if (!response.isSuccess) {
         _loadEngagement();
@@ -938,10 +944,18 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                      Icon(Icons.cloud_upload, size: 16, color: Colors.grey[600]),
                       const SizedBox(width: 4),
                       Text(
-                        DateFormat('MMM d, yyyy - h:mm a').format(report.dateTime),
+                        'Uploaded ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      Text(
+                        DateFormat('MMM d, yyyy - h:mm a').format((report.createdAt ?? report.dateTime).toLocal()),
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[600],
@@ -949,6 +963,31 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
                       ),
                     ],
                   ),
+                  // Show incident time from media metadata if available
+                  if (_getMediaCreationTime() != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.videocam, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Incident ',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        Text(
+                          DateFormat('MMM d, yyyy - h:mm a').format(_getMediaCreationTime()!.toLocal()),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const Divider(height: 16),
                   // Reactions row
                   _buildReactionsRow(),

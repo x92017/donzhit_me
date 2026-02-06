@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/traffic_report.dart';
@@ -228,7 +229,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   child: _wrapWithMaxWidth(_buildCityFilter()),
                 ),
                 SliverToBoxAdapter(
-                  child: _wrapWithMaxWidth(_buildCategoryFilter()),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 2),
+                    child: _wrapWithMaxWidth(_buildCategoryFilter()),
+                  ),
                 ),
                 SliverToBoxAdapter(
                   child: _wrapWithMaxWidth(_buildApprovedReportsGrid(provider)),
@@ -255,6 +259,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 prefixIcon: const Icon(Icons.location_on),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.red, width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 isDense: true,
@@ -324,9 +332,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   Widget _buildCategoryFilter() {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return SizedBox(
+      height: 32,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -334,16 +341,44 @@ class _GalleryScreenState extends State<GalleryScreen> {
         itemBuilder: (context, index) {
           final category = _categories[index];
           final isSelected = category == _selectedCategory;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(category),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _selectedCategory = category;
-                });
-              },
+          final categoryColor = _getEventTypeColor(category);
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedCategory = category;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected ? categoryColor : categoryColor.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(4),
+                    border: isSelected
+                        ? Border.all(color: Colors.white, width: 2)
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isSelected) ...[
+                        const Icon(Icons.check, color: Colors.white, size: 14),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        category,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           );
         },
@@ -420,7 +455,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(top: 2, bottom: 16),
       itemCount: reports.length,
       itemBuilder: (context, index) {
         return Padding(
@@ -766,6 +801,9 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
     return Card(
       clipBehavior: Clip.antiAlias,
       elevation: 2,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+      ),
       child: InkWell(
         onTap: widget.onTap,
         child: Column(
@@ -897,6 +935,20 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
                       ],
                     ),
                   ],
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        DateFormat('MMM d, yyyy - h:mm a').format(report.dateTime),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
                   const Divider(height: 16),
                   // Reactions row
                   _buildReactionsRow(),
@@ -1524,6 +1576,10 @@ class _CityAutocompleteState extends State<_CityAutocomplete> {
           prefixIcon: const Icon(Icons.location_city),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.red, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           isDense: true,

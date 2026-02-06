@@ -105,6 +105,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.red, width: 2),
+                    ),
                     filled: true,
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(

@@ -258,9 +258,9 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.report_problem,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              color: Colors.red,
               size: 32,
             ),
             const SizedBox(width: 12),
@@ -268,11 +268,11 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Report a Traffic Violation',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      color: Colors.red,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -308,11 +308,15 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   Widget _buildTitleField() {
     return TextFormField(
       controller: _titleController,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Title',
         hintText: 'Enter a brief title for the incident',
-        prefixIcon: Icon(Icons.title),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.title),
+        border: const OutlineInputBorder(),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+          borderRadius: BorderRadius.circular(4),
+        ),
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
@@ -327,11 +331,15 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   Widget _buildDescriptionField() {
     return TextFormField(
       controller: _descriptionController,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Description',
         hintText: 'Describe what happened in detail',
-        prefixIcon: Icon(Icons.description),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.description),
+        border: const OutlineInputBorder(),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+          borderRadius: BorderRadius.circular(4),
+        ),
         alignLabelWithHint: true,
       ),
       maxLines: 4,
@@ -348,10 +356,14 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     return InkWell(
       onTap: _selectDateTime,
       child: InputDecorator(
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'Date/Time',
-          prefixIcon: Icon(Icons.calendar_today),
-          border: OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.calendar_today),
+          border: const OutlineInputBorder(),
+          focusedBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.red, width: 2),
+            borderRadius: BorderRadius.circular(4),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -381,6 +393,10 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             labelText: 'Road Usage (select all that apply)',
             prefixIcon: const Icon(Icons.directions_car),
             border: const OutlineInputBorder(),
+            focusedBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+              borderRadius: BorderRadius.circular(4),
+            ),
             errorText: state.errorText,
           ),
           child: Wrap(
@@ -409,6 +425,23 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     );
   }
 
+  Color _getEventTypeColor(String eventType) {
+    switch (eventType) {
+      case 'Red Light':
+        return Colors.red;
+      case 'Speeding':
+        return Colors.orange;
+      case 'On Phone':
+        return Colors.purple;
+      case 'Reckless':
+        return Colors.deepOrange;
+      case 'Pedestrian Intersection':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
   Widget _buildEventTypeSelector() {
     return FormField<Set<String>>(
       initialValue: _selectedEventTypes,
@@ -424,6 +457,10 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             labelText: 'Event Type (select all that apply)',
             prefixIcon: const Icon(Icons.warning_amber),
             border: const OutlineInputBorder(),
+            focusedBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+              borderRadius: BorderRadius.circular(4),
+            ),
             errorText: state.errorText,
           ),
           child: Wrap(
@@ -431,19 +468,45 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
             runSpacing: 4,
             children: DropdownOptions.eventTypes.map((type) {
               final isSelected = _selectedEventTypes.contains(type);
-              return FilterChip(
-                label: Text(type),
-                selected: isSelected,
-                onSelected: (selected) {
+              final typeColor = _getEventTypeColor(type);
+              return GestureDetector(
+                onTap: () {
                   setState(() {
-                    if (selected) {
-                      _selectedEventTypes.add(type);
-                    } else {
+                    if (isSelected) {
                       _selectedEventTypes.remove(type);
+                    } else {
+                      _selectedEventTypes.add(type);
                     }
                   });
                   state.didChange(_selectedEventTypes);
                 },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected ? typeColor : typeColor.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(4),
+                    border: isSelected
+                        ? Border.all(color: Colors.white, width: 2)
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isSelected) ...[
+                        const Icon(Icons.check, color: Colors.white, size: 14),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        type,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             }).toList(),
           ),
@@ -455,10 +518,14 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   Widget _buildStateDropdown() {
     return DropdownButtonFormField<String>(
       initialValue: _selectedState,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'State/Province',
-        prefixIcon: Icon(Icons.location_on),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.location_on),
+        border: const OutlineInputBorder(),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+          borderRadius: BorderRadius.circular(4),
+        ),
       ),
       isExpanded: true,
       items: DropdownOptions.selectableStatesAndProvinces
@@ -506,11 +573,15 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
   Widget _buildInjuriesField() {
     return TextFormField(
       controller: _injuriesController,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Any Injuries',
         hintText: 'Describe any injuries that occurred (or "None")',
-        prefixIcon: Icon(Icons.healing),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.healing),
+        border: const OutlineInputBorder(),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+          borderRadius: BorderRadius.circular(4),
+        ),
       ),
       maxLines: 2,
       validator: (value) {
@@ -1153,6 +1224,10 @@ class _ReportCityAutocompleteState extends State<_ReportCityAutocomplete> {
           hintText: 'Search for a city in ${widget.selectedState}',
           prefixIcon: const Icon(Icons.location_city),
           border: const OutlineInputBorder(),
+          focusedBorder: OutlineInputBorder(
+            borderSide: const BorderSide(color: Colors.red, width: 2),
+            borderRadius: BorderRadius.circular(4),
+          ),
           suffixIcon: _isLoading
               ? const Padding(
                   padding: EdgeInsets.all(12),

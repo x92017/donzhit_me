@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 
@@ -9,12 +10,15 @@ class SettingsProvider with ChangeNotifier {
   bool _notifications = true;
   String _defaultState = '';
   bool _autoSaveDraft = true;
+  String _localeCode = 'en'; // Default to English
 
   // Getters
   bool get darkMode => _darkMode;
   bool get notifications => _notifications;
   String get defaultState => _defaultState;
   bool get autoSaveDraft => _autoSaveDraft;
+  String get localeCode => _localeCode;
+  Locale get locale => Locale(_localeCode);
 
   ThemeMode get themeMode => _darkMode ? ThemeMode.dark : ThemeMode.light;
 
@@ -25,6 +29,7 @@ class SettingsProvider with ChangeNotifier {
     _notifications = settings['notifications'] as bool? ?? true;
     _defaultState = settings['defaultState'] as String? ?? '';
     _autoSaveDraft = settings['autoSaveDraft'] as bool? ?? true;
+    _localeCode = settings['localeCode'] as String? ?? 'en';
     notifyListeners();
   }
 
@@ -70,6 +75,13 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set locale code
+  Future<void> setLocale(String localeCode) async {
+    _localeCode = localeCode;
+    await _saveSettings();
+    notifyListeners();
+  }
+
   /// Save settings to storage
   Future<void> _saveSettings() async {
     await _storageService.saveSettings({
@@ -77,6 +89,7 @@ class SettingsProvider with ChangeNotifier {
       'notifications': _notifications,
       'defaultState': _defaultState,
       'autoSaveDraft': _autoSaveDraft,
+      'localeCode': _localeCode,
     });
   }
 
@@ -86,6 +99,7 @@ class SettingsProvider with ChangeNotifier {
     _notifications = true;
     _defaultState = '';
     _autoSaveDraft = true;
+    _localeCode = 'en';
     await _saveSettings();
     notifyListeners();
   }

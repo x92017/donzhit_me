@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../l10n/app_localizations.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../providers/settings_provider.dart';
@@ -143,10 +144,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
 
     // On mobile platforms, use a custom button
+    final l10n = AppLocalizations.of(context);
     return ElevatedButton.icon(
       onPressed: _handleSignIn,
       icon: const Icon(Icons.login, size: 18),
-      label: const Text('Sign In'),
+      label: Text(l10n?.signIn ?? 'Sign In'),
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -210,7 +212,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                             const SizedBox(height: 2),
                             Center(
                               child: Text(
-                                'Report pedestrian/traffic violations',
+                                AppLocalizations.of(context)?.homeSubtitle ?? 'Report pedestrian/traffic violations',
                                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                       color: Colors.white.withValues(alpha: 0.9),
                                     ),
@@ -247,6 +249,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   Widget _buildStateFilter() {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
@@ -255,7 +258,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             child: DropdownButtonFormField<String>(
               value: _selectedState,
               decoration: InputDecoration(
-                labelText: 'State/Province',
+                labelText: l10n?.stateProvince ?? 'State/Province',
                 prefixIcon: const Icon(Icons.location_on),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -269,9 +272,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
               ),
               isExpanded: true,
               items: [
-                const DropdownMenuItem<String>(
+                DropdownMenuItem<String>(
                   value: null,
-                  child: Text('All Locations'),
+                  child: Text(l10n?.allLocations ?? 'All Locations'),
                 ),
                 ...DropdownOptions.selectableStatesAndProvinces.map(
                   (state) => DropdownMenuItem(
@@ -947,7 +950,7 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
                       Icon(Icons.cloud_upload, size: 16, color: Colors.grey[600]),
                       const SizedBox(width: 4),
                       Text(
-                        'Uploaded ',
+                        '${AppLocalizations.of(context)?.uploaded ?? 'Uploaded'} ',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -971,7 +974,7 @@ class _ApprovedReportCardState extends State<_ApprovedReportCard> {
                         Icon(Icons.videocam, size: 16, color: Colors.grey[600]),
                         const SizedBox(width: 4),
                         Text(
-                          'Incident ',
+                          '${AppLocalizations.of(context)?.incident ?? 'Incident'} ',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,

@@ -1,0 +1,116 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "DonzHit.me",
+
+  "navHome": "Home",
+  "navReport": "Report",
+  "navPosts": "Posts",
+  "navSettings": "Settings",
+  "navAdmin": "Admin",
+
+  "homeSubtitle": "Report pedestrian/traffic violations",
+  "allLocations": "All Locations",
+  "stateProvince": "State/Province",
+  "cityOptional": "City (Optional)",
+  "filterByCity": "Filter by city in {state}",
+  "@filterByCity": {
+    "placeholders": {
+      "state": {"type": "String"}
+    }
+  },
+
+  "eventTypeAll": "All",
+  "eventTypePedestrianIntersection": "Pedestrian Intersection",
+  "eventTypeRedLight": "Red Light",
+  "eventTypeSpeeding": "Speeding",
+  "eventTypeOnPhone": "On Phone",
+  "eventTypeReckless": "Reckless",
+
+  "uploaded": "Uploaded",
+  "incident": "Incident",
+
+  "signIn": "Sign In",
+  "signInWithGoogle": "Sign In with Google",
+  "signOut": "Sign Out",
+  "signInFailed": "Sign in failed. Please try again.",
+
+  "signInRequired": "Sign In Required",
+  "signInToReport": "Help make our roads safer by reporting dangerous driving behavior",
+  "signInTo": "Sign in to:",
+  "benefitUploadMedia": "Upload videos & photos of incidents",
+  "benefitReportDetails": "Report location and incident details",
+  "benefitTrackReports": "Track your submitted reports",
+  "benefitReactComment": "React and comment on reports",
+  "privacyNote": "Your privacy is important. We only use your email for authentication.",
+
+  "reportTitle": "Report a Traffic Violation",
+  "reportSubtitle": "Fill out the form below with details about the incident",
+  "reportATrafficIncident": "Report a Traffic Incident",
+
+  "formTitle": "Title",
+  "formTitleHint": "Enter a brief title for the incident",
+  "formTitleRequired": "Please enter a title",
+
+  "formDescription": "Description",
+  "formDescriptionHint": "Describe what happened in detail",
+  "formDescriptionRequired": "Please enter a description",
+
+  "formDateTime": "Date/Time",
+
+  "formRoadUsage": "Road Usage (select all that apply)",
+  "formRoadUsageRequired": "Please select at least one road usage type",
+
+  "formEventType": "Event Type (select all that apply)",
+  "formEventTypeRequired": "Please select at least one event type",
+
+  "formInjuries": "Any Injuries",
+  "formInjuriesHint": "Describe any injuries that occurred (or \"None\")",
+  "formInjuriesRequired": "Please describe any injuries (or enter \"None\")",
+
+  "formStateRequired": "Please select a state or province",
+
+  "submitReport": "Submit Report",
+  "submitting": "Submitting...",
+  "reportSubmitted": "Report submitted successfully!",
+  "reportSubmitFailed": "Failed to submit report",
+
+  "yourPastPosts": "Your Past Posts",
+  "searchReports": "Search reports...",
+  "noReportsFound": "No reports found",
+  "noReportsYet": "You haven't submitted any reports yet",
+
+  "settings": "Settings",
+  "language": "Language",
+  "english": "English",
+  "spanish": "Spanish",
+  "defaultStateProvince": "Default State/Province",
+  "theme": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+
+  "admin": "Admin",
+  "pendingReports": "Pending Reports",
+  "approve": "Approve",
+  "reject": "Reject",
+
+  "clearFilters": "Clear Filters",
+  "noApprovedReports": "No approved reports yet",
+  "noMatchingReports": "No approved reports match your filters",
+
+  "comments": "Comments",
+  "addComment": "Add a comment...",
+  "pleaseSignInToComment": "Please sign in to comment",
+  "pleaseSignInToReact": "Please sign in to react",
+
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "edit": "Edit",
+  "close": "Close",
+  "ok": "OK",
+  "error": "Error",
+  "loading": "Loading...",
+  "retry": "Retry"
+}

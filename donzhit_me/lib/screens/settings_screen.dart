@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../constants/dropdown_options.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/settings_provider.dart';
 import '../providers/report_provider.dart';
 import '../services/storage_service.dart';
@@ -51,7 +52,7 @@ class SettingsScreen extends StatelessWidget {
                         const SizedBox(height: 2),
                         Center(
                           child: Text(
-                            'Settings',
+                            AppLocalizations.of(context)?.settings ?? 'Settings',
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   color: Colors.white.withValues(alpha: 0.9),
                                 ),
@@ -85,16 +86,26 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
               ],
               // Appearance Section
-              _buildSectionHeader(context, 'Appearance'),
+              _buildSectionHeader(context, AppLocalizations.of(context)?.theme ?? 'Appearance'),
               Card(
                 child: Column(
                   children: [
                     SwitchListTile(
-                      title: const Text('Dark Mode'),
+                      title: Text(AppLocalizations.of(context)?.themeDark ?? 'Dark Mode'),
                       subtitle: const Text('Enable dark theme'),
                       secondary: const Icon(Icons.dark_mode),
                       value: settings.darkMode,
                       onChanged: (value) => settings.setDarkMode(value),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.language),
+                      title: Text(AppLocalizations.of(context)?.language ?? 'Language'),
+                      subtitle: Text(settings.localeCode == 'en'
+                        ? (AppLocalizations.of(context)?.english ?? 'English')
+                        : (AppLocalizations.of(context)?.spanish ?? 'Spanish')),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _showLanguageSelector(context, settings),
                     ),
                   ],
                 ),
@@ -119,13 +130,13 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Default Values Section
-              _buildSectionHeader(context, 'Default Values'),
+              _buildSectionHeader(context, AppLocalizations.of(context)?.defaultStateProvince ?? 'Default Values'),
               Card(
                 child: Column(
                   children: [
                     ListTile(
                       leading: const Icon(Icons.location_on),
-                      title: const Text('Default State/Province'),
+                      title: Text(AppLocalizations.of(context)?.stateProvince ?? 'State/Province'),
                       subtitle: Text(
                         settings.defaultState.isEmpty
                             ? 'Not set'
@@ -259,6 +270,59 @@ class SettingsScreen extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: Theme.of(context).colorScheme.primary,
           fontSize: 14,
+        ),
+      ),
+    );
+  }
+
+  void _showLanguageSelector(BuildContext context, SettingsProvider settings) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                l10n?.language ?? 'Language',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Text('🇺🇸', style: TextStyle(fontSize: 24)),
+              title: Text(l10n?.english ?? 'English'),
+              trailing: settings.localeCode == 'en'
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                settings.setLocale('en');
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Text('🇪🇸', style: TextStyle(fontSize: 24)),
+              title: Text(l10n?.spanish ?? 'Spanish'),
+              trailing: settings.localeCode == 'es'
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                settings.setLocale('es');
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );

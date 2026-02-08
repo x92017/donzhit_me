@@ -1,0 +1,111 @@
+{
+  "@@locale": "es",
+
+  "appTitle": "DonzHit.me",
+
+  "navHome": "Inicio",
+  "navReport": "Reportar",
+  "navPosts": "Publicaciones",
+  "navSettings": "Ajustes",
+  "navAdmin": "Admin",
+
+  "homeSubtitle": "Reportar violaciones de tráfico/peatones",
+  "allLocations": "Todas las ubicaciones",
+  "stateProvince": "Estado/Provincia",
+  "cityOptional": "Ciudad (Opcional)",
+  "filterByCity": "Filtrar por ciudad en {state}",
+
+  "eventTypeAll": "Todos",
+  "eventTypePedestrianIntersection": "Intersección peatonal",
+  "eventTypeRedLight": "Luz roja",
+  "eventTypeSpeeding": "Exceso de velocidad",
+  "eventTypeOnPhone": "Usando teléfono",
+  "eventTypeReckless": "Conducción temeraria",
+
+  "uploaded": "Subido",
+  "incident": "Incidente",
+
+  "signIn": "Iniciar sesión",
+  "signInWithGoogle": "Iniciar sesión con Google",
+  "signOut": "Cerrar sesión",
+  "signInFailed": "Error al iniciar sesión. Inténtalo de nuevo.",
+
+  "signInRequired": "Inicio de sesión requerido",
+  "signInToReport": "Ayuda a hacer nuestras carreteras más seguras reportando comportamientos peligrosos",
+  "signInTo": "Inicia sesión para:",
+  "benefitUploadMedia": "Subir videos y fotos de incidentes",
+  "benefitReportDetails": "Reportar ubicación y detalles del incidente",
+  "benefitTrackReports": "Seguir tus reportes enviados",
+  "benefitReactComment": "Reaccionar y comentar en reportes",
+  "privacyNote": "Tu privacidad es importante. Solo usamos tu email para autenticación.",
+
+  "reportTitle": "Reportar una Violación de Tráfico",
+  "reportSubtitle": "Completa el formulario con los detalles del incidente",
+  "reportATrafficIncident": "Reportar un Incidente de Tráfico",
+
+  "formTitle": "Título",
+  "formTitleHint": "Ingresa un título breve para el incidente",
+  "formTitleRequired": "Por favor ingresa un título",
+
+  "formDescription": "Descripción",
+  "formDescriptionHint": "Describe lo que sucedió en detalle",
+  "formDescriptionRequired": "Por favor ingresa una descripción",
+
+  "formDateTime": "Fecha/Hora",
+
+  "formRoadUsage": "Uso de la vía (selecciona todos los que apliquen)",
+  "formRoadUsageRequired": "Por favor selecciona al menos un tipo de uso de vía",
+
+  "formEventType": "Tipo de evento (selecciona todos los que apliquen)",
+  "formEventTypeRequired": "Por favor selecciona al menos un tipo de evento",
+
+  "formInjuries": "¿Alguna lesión?",
+  "formInjuriesHint": "Describe las lesiones ocurridas (o \"Ninguna\")",
+  "formInjuriesRequired": "Por favor describe las lesiones (o ingresa \"Ninguna\")",
+
+  "formStateRequired": "Por favor selecciona un estado o provincia",
+
+  "submitReport": "Enviar Reporte",
+  "submitting": "Enviando...",
+  "reportSubmitted": "¡Reporte enviado exitosamente!",
+  "reportSubmitFailed": "Error al enviar el reporte",
+
+  "yourPastPosts": "Tus Publicaciones Anteriores",
+  "searchReports": "Buscar reportes...",
+  "noReportsFound": "No se encontraron reportes",
+  "noReportsYet": "Aún no has enviado ningún reporte",
+
+  "settings": "Ajustes",
+  "language": "Idioma",
+  "english": "Inglés",
+  "spanish": "Español",
+  "defaultStateProvince": "Estado/Provincia predeterminado",
+  "theme": "Tema",
+  "themeSystem": "Sistema",
+  "themeLight": "Claro",
+  "themeDark": "Oscuro",
+
+  "admin": "Administración",
+  "pendingReports": "Reportes pendientes",
+  "approve": "Aprobar",
+  "reject": "Rechazar",
+
+  "clearFilters": "Limpiar filtros",
+  "noApprovedReports": "Aún no hay reportes aprobados",
+  "noMatchingReports": "No hay reportes aprobados que coincidan con tus filtros",
+
+  "comments": "Comentarios",
+  "addComment": "Agregar un comentario...",
+  "pleaseSignInToComment": "Por favor inicia sesión para comentar",
+  "pleaseSignInToReact": "Por favor inicia sesión para reaccionar",
+
+  "cancel": "Cancelar",
+  "save": "Guardar",
+  "delete": "Eliminar",
+  "edit": "Editar",
+  "close": "Cerrar",
+  "ok": "OK",
+  "error": "Error",
+  "loading": "Cargando...",
+  "retry": "Reintentar"
+}

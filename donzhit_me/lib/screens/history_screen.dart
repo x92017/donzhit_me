@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../models/traffic_report.dart';
 import '../providers/report_provider.dart';
 import '../widgets/donzhit_logo.dart';
@@ -68,7 +69,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         const SizedBox(height: 2),
                         Center(
                           child: Text(
-                            'Your Past Posts',
+                            AppLocalizations.of(context)?.yourPastPosts ?? 'Your Past Posts',
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   color: Colors.white.withValues(alpha: 0.9),
                                 ),
@@ -100,7 +101,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 padding: const EdgeInsets.all(16),
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: 'Search reports...',
+                    hintText: AppLocalizations.of(context)?.searchReports ?? 'Search reports...',
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -220,6 +221,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildEmptyState() {
+    final l10n = AppLocalizations.of(context);
+    final hasFilters = _searchQuery.isNotEmpty || _filterStatus != null || _filterEventType != null;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -233,11 +237,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchQuery.isNotEmpty ||
-                      _filterStatus != null ||
-                      _filterEventType != null
-                  ? 'No matching reports'
-                  : 'No reports yet',
+              hasFilters
+                  ? (l10n?.noReportsFound ?? 'No matching reports')
+                  : (l10n?.noReportsYet ?? 'No reports yet'),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -246,9 +248,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _searchQuery.isNotEmpty ||
-                      _filterStatus != null ||
-                      _filterEventType != null
+              hasFilters
                   ? 'Try adjusting your filters'
                   : 'Create a report to get started',
               style: TextStyle(

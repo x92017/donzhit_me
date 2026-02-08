@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/report_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/admin_screen.dart';
@@ -8,6 +10,7 @@ import 'screens/report_form_screen.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/sign_in_upsell_screen.dart';
 import 'services/api_service.dart';
 
 void main() async {
@@ -49,6 +52,17 @@ class DonzHitMeApp extends StatelessWidget {
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),
             themeMode: settings.themeMode,
+            locale: settings.locale,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('en'),
+              Locale('es'),
+            ],
             home: const MainNavigationScreen(),
           );
         },
@@ -155,12 +169,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     setState(() {
       // Rebuild navigation when auth state changes
       // Determine screen count based on role:
-      // - Viewer (not signed in): 2 screens (Home, Settings)
+      // - Viewer (not signed in): 3 screens (Home, Report/Upsell, Settings)
       // - Contributor: 4 screens (Home, Report, History, Settings)
       // - Admin: 5 screens (+ Admin)
       int screenCount;
       if (!_apiService.isSignedIn) {
-        screenCount = 2;
+        screenCount = 3;
       } else if (_apiService.isAdmin) {
         screenCount = 5;
       } else {
@@ -184,10 +198,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final isAdmin = _apiService.isAdmin;
     debugPrint('Building screens - isAdmin: $isAdmin, isSignedIn: $isSignedIn, email: ${_apiService.userEmail}, role: ${_apiService.userRole}');
 
-    // Viewer (not signed in): Home and Settings (NavigationBar requires >= 2 destinations)
+    // Viewer (not signed in): Home, Report (upsell), Settings
     if (!isSignedIn) {
       return const [
         GalleryScreen(),
+        SignInUpsellScreen(),
         SettingsScreen(),
       ];
     }
@@ -208,57 +223,63 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return screens;
   }
 
-  List<NavigationDestination> _buildDestinations() {
+  List<NavigationDestination> _buildDestinations(BuildContext context) {
     final isSignedIn = _apiService.isSignedIn;
     final isAdmin = _apiService.isAdmin;
+    final l10n = AppLocalizations.of(context);
 
-    // Viewer (not signed in): Home and Settings (NavigationBar requires >= 2 destinations)
+    // Viewer (not signed in): Home, Report, Settings
     if (!isSignedIn) {
-      return const [
+      return [
         NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
-          label: 'Home',
+          icon: const Icon(Icons.home_outlined),
+          selectedIcon: const Icon(Icons.home),
+          label: l10n?.navHome ?? 'Home',
         ),
         NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings),
-          label: 'Settings',
+          icon: const Icon(Icons.add_circle_outline),
+          selectedIcon: const Icon(Icons.add_circle),
+          label: l10n?.navReport ?? 'Report',
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings),
+          label: l10n?.navSettings ?? 'Settings',
         ),
       ];
     }
 
     // Contributor (signed in): Home, Report, History, Settings
     final destinations = <NavigationDestination>[
-      const NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home),
-        label: 'Home',
+      NavigationDestination(
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
+        label: l10n?.navHome ?? 'Home',
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.add_circle_outline),
-        selectedIcon: Icon(Icons.add_circle),
-        label: 'Report',
+      NavigationDestination(
+        icon: const Icon(Icons.add_circle_outline),
+        selectedIcon: const Icon(Icons.add_circle),
+        label: l10n?.navReport ?? 'Report',
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.history_outlined),
-        selectedIcon: Icon(Icons.history),
-        label: 'Posts',
+      NavigationDestination(
+        icon: const Icon(Icons.history_outlined),
+        selectedIcon: const Icon(Icons.history),
+        label: l10n?.navPosts ?? 'Posts',
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.settings_outlined),
-        selectedIcon: Icon(Icons.settings),
-        label: 'Settings',
+      NavigationDestination(
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings),
+        label: l10n?.navSettings ?? 'Settings',
       ),
     ];
 
     // Admin: Add Admin destination
     if (isAdmin) {
       destinations.add(
-        const NavigationDestination(
-          icon: Icon(Icons.admin_panel_settings_outlined),
-          selectedIcon: Icon(Icons.admin_panel_settings),
-          label: 'Admin',
+        NavigationDestination(
+          icon: const Icon(Icons.admin_panel_settings_outlined),
+          selectedIcon: const Icon(Icons.admin_panel_settings),
+          label: l10n?.navAdmin ?? 'Admin',
         ),
       );
     }
@@ -269,7 +290,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = _buildScreens();
-    final destinations = _buildDestinations();
+    final destinations = _buildDestinations(context);
 
     // Ensure current index is valid when admin status changes
     if (_currentIndex >= screens.length) {

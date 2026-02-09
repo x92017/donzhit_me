@@ -292,18 +292,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final screens = _buildScreens();
     final destinations = _buildDestinations(context);
 
-    // Ensure current index is valid when admin status changes
-    if (_currentIndex >= screens.length) {
-      _currentIndex = 0;
+    // Calculate valid index (don't modify state during build)
+    final validIndex = _currentIndex >= screens.length ? 0 : _currentIndex;
+
+    // Schedule index update for next frame if needed (to avoid modifying state during build)
+    if (validIndex != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _currentIndex = validIndex;
+          });
+        }
+      });
     }
 
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: validIndex,
         children: screens,
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
+        selectedIndex: validIndex,
         onDestinationSelected: (index) {
           setState(() {
             _currentIndex = index;

@@ -53,6 +53,10 @@ class ApiService {
   // (Credential Manager can emit spurious SignOut events during authorization)
   bool _ignoringSignOutEvents = false;
 
+  // Flag to ignore SignIn events during manual sign-in
+  // (Prevents duplicate processing when signIn() is called directly)
+  bool _isManualSignInInProgress = false;
+
   // Auth state change listeners
   final List<VoidCallback> _authStateListeners = [];
   StreamSubscription<GoogleSignInAuthenticationEvent>? _authSubscription;
@@ -80,6 +84,13 @@ class ApiService {
     }
     switch (event) {
       case GoogleSignInAuthenticationEventSignIn():
+        // Skip if manual sign-in is in progress (it handles its own notification)
+        if (_isManualSignInInProgress) {
+          if (kDebugMode) {
+            print('SignIn event ignored (manual sign-in in progress)');
+          }
+          return;
+        }
         final user = event.user;
         if (kDebugMode) {
           print('SignIn event - email: ${user.email}');
@@ -88,6 +99,13 @@ class ApiService {
         _currentUserDisplayName = user.displayName;
         // Cache token from silent sign-in, then exchange for JWT
         _cacheTokenFromUser(user).then((_) async {
+          // Double-check manual sign-in isn't in progress
+          if (_isManualSignInInProgress) {
+            if (kDebugMode) {
+              print('Auto sign-in JWT exchange skipped (manual sign-in took over)');
+            }
+            return;
+          }
           // Exchange Google token for JWT
           if (_cachedToken != null) {
             if (kDebugMode) {
@@ -190,6 +208,8 @@ class ApiService {
 
   /// Sign in with Google and exchange for JWT
   Future<bool> signIn() async {
+    // Set flag to prevent event handler from processing duplicate sign-in
+    _isManualSignInInProgress = true;
     try {
       if (kDebugMode) {
         print('Starting Google Sign-In authenticate()...');
@@ -243,6 +263,9 @@ class ApiService {
         print('Stack trace: $stackTrace');
       }
       return false;
+    } finally {
+      // Clear flag after sign-in completes (success or failure)
+      _isManualSignInInProgress = false;
     }
   }
 
